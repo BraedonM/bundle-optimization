@@ -1,0 +1,9 @@
+stack on edges then long (multiple long to match vertical height)
+minimize blank space (new goal)
+add each packaging mat in yellow according to max bundle length
+add ONE of the brown highlighted packaging according to bundle dims
+GUI program?
+dynamic bundle sizes 590 max, make last bundle smaller to fit contents? this is where the brown highlights come in
+
+
+compare with past orders

@@ -1,0 +1,6 @@
+.venv
+src/venv
+src/.venv
+src/__pycache__
+
+new_data/images

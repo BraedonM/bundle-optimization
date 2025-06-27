@@ -1,0 +1,8 @@
+June 19: 1hr
+June 20: 3.5hr
+June 21: 2.5hr
+June 24: 3hr
+
+
+add weight of packaging material
+if length needed, fix length values of filler materials in code
