@@ -5,5 +5,9 @@ add ONE of the brown highlighted packaging according to bundle dims
 GUI program?
 dynamic bundle sizes 590 max, make last bundle smaller to fit contents? this is where the brown highlights come in
 
-
 compare with past orders
+
+============================================================================
+
+extra column in Excel for number of items in each SKU (rounding up?)
+program adds extra SKUs in greedy_fill_remaining_spaces idk why

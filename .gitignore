@@ -4,3 +4,5 @@ src/.venv
 src/__pycache__
 
 new_data/images
+src/build
+src/dist

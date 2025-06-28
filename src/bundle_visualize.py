@@ -16,37 +16,70 @@ def visualize_bundles(bundles: List[Bundle], savePath: str = None) -> None:
         axs = [axs]
 
     for idx, (bundle, ax) in enumerate(zip(bundles, axs)):
-        ax.set_title(f"Bundle {idx + 1}")
-        ax.set_xlim(0, bundle.width)
-        ax.set_ylim(0, bundle.height)
+        # Use actual bundle dimensions for visualization
+        actual_width, actual_height, max_length = bundle.get_actual_dimensions()
+        
+        ax.set_title(f"Bundle {idx + 1}\n({actual_width:.0f}x{actual_height:.0f}x{max_length:.0f}mm, {bundle.get_total_weight():.2f}kg)")
+        ax.set_xlim(0, actual_width)
+        ax.set_ylim(0, actual_height)
         ax.set_aspect('equal')
         ax.set_xticks([])
         ax.set_yticks([])
         ax.grid(False)
 
         for sku in bundle.skus:
+            # Assign consistent colors, with different shades for filler materials
             if sku.id not in sku_colors:
-                sku_colors[sku.id] = [random.random() * 0.7 + 0.3 for _ in range(3)]
+                if "Filler" in sku.id:
+                    # Use gray tones for filler materials
+                    sku_colors[sku.id] = [0.7, 0.7, 0.7]  # Light gray
+                else:
+                    # Use bright colors for regular SKUs
+                    sku_colors[sku.id] = [random.random() * 0.7 + 0.3 for _ in range(3)]
+            
             color = sku_colors[sku.id]
-            rect = patches.Rectangle(
-                (sku.x, sku.y),
-                sku.width,
-                sku.height,
-                linewidth=1,
-                edgecolor='black',
-                facecolor=color,
-            )
+            
+            # Create rectangle with different border style for filler
+            if "Filler" in sku.id:
+                rect = patches.Rectangle(
+                    (sku.x, sku.y),
+                    sku.width,
+                    sku.height,
+                    linewidth=2,
+                    edgecolor='red',
+                    facecolor=color,
+                    linestyle='--',  # Dashed line for filler
+                    alpha=0.7
+                )
+            else:
+                rect = patches.Rectangle(
+                    (sku.x, sku.y),
+                    sku.width,
+                    sku.height,
+                    linewidth=1,
+                    edgecolor='black',
+                    facecolor=color,
+                )
             ax.add_patch(rect)
 
-            # Only label if the area is large enough
+            # Label with SKU ID and quantity if stacked
             if sku.width > 15 and sku.height > 10:
                 label_x = sku.x + sku.width / 2
                 label_y = sku.y + sku.height / 2
-                ax.text(label_x, label_y, sku.id, ha='center', va='center', fontsize=7, weight='bold')
+                
+                # Show stack quantity if > 1
+                if sku.stacked_quantity > 1:
+                    label_text = f"{sku.id}\n(x{sku.stacked_quantity})"
+                else:
+                    label_text = sku.id
+                    
+                ax.text(label_x, label_y, label_text, ha='center', va='center', 
+                       fontsize=6, weight='bold', 
+                       bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.8))
 
     plt.tight_layout()
     if savePath:
-        plt.savefig(savePath, dpi=300)
+        plt.savefig(savePath, dpi=300, bbox_inches='tight')
         plt.close(fig)
     else:
         print("Path not found, displaying the plot instead.")
