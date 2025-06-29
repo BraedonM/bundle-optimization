@@ -52,7 +52,7 @@ class Ui_MainWindow:
         self.ui.openExcel.clicked.connect(self.openExcel)
         self.ui.helpButton.clicked.connect(self.openHelp)
 
-        self.data = {}
+        self.data = pd.DataFrame()
         self.maxWidth = 590
         self.maxHeight = 590
         self.maxLength = 3680
@@ -105,7 +105,7 @@ class Ui_MainWindow:
         if os.path.exists(example_path):
             os.startfile(example_path)
         else:
-            QMessageBox.warning(self.Widget, "File Not Found", "Example file not found.")
+            self.showAlert("File Not Found", "Example file not found.")
 
     def optimizeBundles(self):
         """
@@ -118,9 +118,9 @@ class Ui_MainWindow:
         self.ui.progressBar.setValue(10)
         self.ui.progressLabel.setText("Getting data...")
 
-        # data = self.updateQuantities(data)
-        # if data.empty:
-        #     return
+        data = self.updateQuantities(data)
+        if data.empty:
+            return
 
         # get unique orders
         unique_orders = data['Order ID'].unique()
@@ -176,13 +176,13 @@ class Ui_MainWindow:
                     sku_qty = data.loc[(data['SKU'] == sku_id) & (data['Order ID'] == order_id), 'SKU Qty'].values[0]
                 else:
                     continue
-                if order_id == "SO-1013178" and sku_id == "CLIP.N1500":
+                if order_id == "SO-1013178" and sku_id == "6VR.289.15DWL":
                     pass
                 # get the quantity of the SKU in the SKU_Quantities sheet
                 sub_bundle_qty = row['Total Quantity']
                 # calculate the new quantity as a multiple of the sub-bundle quantity
                 new_qty = ceil(sku_qty / sub_bundle_qty)
-                data.loc[data['SKU'] == sku_id, 'SKU Qty'] = new_qty * sub_bundle_qty
+                data.loc[(data['SKU'] == sku_id) & (data['Order ID'] == order_id), 'SKU Qty'] = new_qty * sub_bundle_qty
 
         return data
 
@@ -283,7 +283,7 @@ class Ui_MainWindow:
         if hasattr(self, 'images_dir'):
             os.startfile(self.images_dir)
         else:
-            QMessageBox.warning(self.Widget, "No Images", "No images have been generated yet. Please optimize bundles first.", "error")
+            self.showAlert("No Images", "No images have been generated yet. Please optimize bundles first.", "error")
 
     def openExcel(self):
         """

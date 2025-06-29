@@ -6,3 +6,5 @@ src/__pycache__
 new_data/images
 src/build
 src/dist
+build
+dist

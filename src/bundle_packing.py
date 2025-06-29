@@ -103,7 +103,7 @@ def pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: in
                 stackable.append(sku)
                 count += 1
                 
-        return stackable
+        return stackable[:-1]
 
     def greedy_fill_remaining_space(bundle: Bundle, remaining_skus: List[SKU]) -> List[SKU]:
         """Fill remaining space in bundle using greedy algorithm with stacking"""
@@ -172,7 +172,7 @@ def pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: in
                     sorted_points = sorted(candidate_points, key=lambda p: (p[1], p[0]))
 
                     placed_any = True
-                    break  # Start over with new candidate points
+                    break
 
         return still_remaining
 
@@ -238,10 +238,14 @@ def pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: in
                     if stackable_sku in remaining_skus:
                         remaining_skus.remove(stackable_sku)
 
-            # Remove placed SKUs from remaining list (in reverse order to maintain indices)
-            for i in sorted(placed_in_row, reverse=True):
-                if i < len(remaining_skus):  # Check bounds since we may have removed stackable SKUs
-                    remaining_skus.pop(i)
+            # Remove placed SKUs by object identity (safest)
+            for i, sku, *_ in row_skus:
+                if sku in remaining_skus:
+                    remaining_skus.remove(sku)
+
+                for stackable_sku in stackable_skus:
+                    if stackable_sku in remaining_skus:
+                        remaining_skus.remove(stackable_sku)
 
             # Move to next row
             current_y += row_height
