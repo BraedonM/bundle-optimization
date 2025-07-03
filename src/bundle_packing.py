@@ -1,27 +1,8 @@
 from typing import List, Tuple
-from bundle_classes import SKU, Bundle, PlacedSKU
+from bundle_classes import SKU, Bundle, PlacedSKU, FILLER_62, FILLER_44
 
 global maxLength
 maxLength = 3680  # Maximum length for bundles
-
-# Define filler materials
-FILLER_44 = SKU(
-    id="Pack_44Filler",
-    width=100,
-    height=100,
-    length=3660,
-    weight=1.810,
-    desc="Pack 44 Filler Material"
-)
-
-FILLER_62 = SKU(
-    id="Pack_62Filler", 
-    width=150,
-    height=50,
-    length=3660,
-    weight=2.268,
-    desc="Pack 62 Filler Material"
-)
 
 def pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: int) -> List[Bundle]:
     """
@@ -232,7 +213,7 @@ def pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: in
 
                 bundle.add_sku(sku, x, y, rotated, stack_quantity)
                 placed_in_row.append(i)
-                
+
                 # Remove stackable SKUs from remaining list
                 for stackable_sku in stackable_skus:
                     if stackable_sku in remaining_skus:
@@ -308,6 +289,7 @@ def pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: in
                 remaining_skus.remove(largest_sku)
 
         if new_bundle.skus:  # Only add bundles that have SKUs
+            new_bundle.add_packaging() # Add packaging to bundle (increases weight)
             bundles.append(new_bundle)
 
     return bundles
@@ -419,6 +401,7 @@ def add_filler_material(bundle: Bundle) -> None:
                 # Create a copy of filler with potentially rotated dimensions
                 filler_copy = SKU(
                     id=best_filler.id,
+                    bundleqty=best_filler.bundleqty,
                     width=width,
                     height=height,
                     length=best_filler.length,
@@ -444,7 +427,7 @@ def pack_skus(skus: List[SKU], bundle_width: int, bundle_height: int) -> List[Bu
 
     # Add filler material and resize bundles
     for bundle in bundles:
-        add_filler_material(bundle)
         bundle.resize_to_content()
+        add_filler_material(bundle)
 
     return bundles

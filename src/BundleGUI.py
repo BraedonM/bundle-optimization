@@ -15,25 +15,6 @@ from bundle_classes import SKU, Bundle
 from bundle_visualize import visualize_bundles
 from bundle_packing import pack_skus
 
-# Define filler materials
-FILLER_44 = SKU(
-    id="Pack_44Filler",
-    width=100,
-    height=100,
-    length=3660,
-    weight=1.810,
-    desc="Pack 44 Filler Material"
-)
-
-FILLER_62 = SKU(
-    id="Pack_62Filler", 
-    width=150,
-    height=50,
-    length=3660,
-    weight=2.268,
-    desc="Pack 62 Filler Material"
-)
-
 class Ui_MainWindow:
     def __init__(self):
         self.Widget = QWidget()
@@ -57,6 +38,7 @@ class Ui_MainWindow:
         self.maxHeight = 590
         self.maxLength = 3680
         self.workingDir = None  # to hold the directory of the selected Excel file
+        self.missingDataSKUs = []  # to hold SKUs that are missing data in the Excel file
 
 
     def get_workbook(self):
@@ -75,7 +57,6 @@ class Ui_MainWindow:
 
         # load the workbook and read the sheet "SO_Input"
         self.workbook = openpyxl.load_workbook(path)
-        self.data = self.get_data(self.workbook)
         self.ui.excelDir.setText(path)
 
     def get_data(self, workbook):
@@ -86,16 +67,73 @@ class Ui_MainWindow:
         if "SO_Input" not in workbook.sheetnames:
             self.showAlert("Warning", "Sheet 'SO_Input' not found in the selected file.")
             return None
-        sheet = workbook["SO_Input"]
+        so_input = workbook["SO_Input"]
+        sb_data = workbook["Sub-Bundle_Data"]
 
-        # create headers with dataframe
-        headers = [cell.value for cell in sheet[1]] # first row as headers
-        df = pd.DataFrame(columns=headers)
-        # read all rows from the sheet
-        for row in sheet.iter_rows(min_row=2, values_only=True):
-            df.loc[len(df)] = row  # append each row to the dataframe
+        df = pd.DataFrame(columns=[cell.value for cell in so_input[1]])
+        sb_df = pd.DataFrame(columns=[cell.value for cell in sb_data[2]])
+        # read all rows from the sheets
+        for row in so_input.iter_rows(min_row=2, values_only=True):
+            df.loc[len(df)] = row
+        for row in sb_data.iter_rows(min_row=3, values_only=True):
+            # check for any empty cells in the row
+            if any(cell is None for cell in row):
+                # if row[0] not in self.missingDataSKUs:
+                #     self.missingDataSKUs.append(row[0])  # assuming SKU is in the second column
+                continue
+            sb_df.loc[len(sb_df)] = row
+
+        # remove any rows with SKUs that are in the missingDataSKUs list
+        df = df[~df['SKU'].isin(self.missingDataSKUs)]
+
+        # check if the required columns are present
+        df_cols = "Order ID", "SKU", "SKU Qty", "SKU Qty/Bundle", "SKU Description", "SKU Width (mm)", "SKU Height (mm)", "SKU Length (mm)", "SKU Weight (kg)"
+        for col in df_cols:
+            if col not in df.columns:
+                # add the column with default values
+                df[col] = None
+
+        # put data from sb_df into df rows
+        for _, row in sb_df.iterrows():
+            sku_id = row['SKU']
+            df_rows = []
+            for index, df_row in df.iterrows():
+                if sku_id in df_row['SKU']:
+                    df_rows.append(index)
+            for df_row_idx in df_rows:
+                # update the SKU Qty/Bundle column with the value from sb_df
+                df.loc[df_row_idx, 'SKU Qty/Bundle'] = row['Qty/bundle']
+                df.loc[df_row_idx, 'SKU Width (mm)'] = row['Width (mm)']
+                df.loc[df_row_idx, 'SKU Height (mm)'] = row['Height (mm)']
+                df.loc[df_row_idx, 'SKU Length (mm)'] = row['Length (mm)']
+                df.loc[df_row_idx, 'SKU Weight (kg)'] = row['Weight kg/length']
+
+        # iterate through df and convert qty (in pieces) to qty (in bundles)
+        for index, row in df.iterrows():
+            if row['SKU Qty/Bundle'] is not None and row['SKU Qty'] is not None:
+                try:
+                    # convert SKU Qty to SKU Qty/Bundle
+                    df.loc[index, 'SKU Qty'] = ceil(row['SKU Qty'] / row['SKU Qty/Bundle'])
+                except ZeroDivisionError:
+                    self.showAlert("Error", f"SKU Qty/Bundle cannot be zero for SKU {row['SKU']}. Please check the input data.", "error")
+                    return pd.DataFrame()
 
         return df
+
+    def removeInvalids(self, order_skus: dict) -> dict:
+        """
+        Iterate through the order_skus dictionary and remove any SKUs that have None as width, height, length, or weight.
+        """
+        for order, skus in order_skus.items():
+            valid_skus = []
+            for sku in skus:
+                if sku.width is None or sku.height is None or sku.length is None or sku.weight is None:
+                    if sku.id not in self.missingDataSKUs:
+                        self.missingDataSKUs.append(sku.id)  # add to missing data SKUs list
+                else:
+                    valid_skus.append(sku)
+            order_skus[order] = valid_skus
+        return order_skus
 
     def openExampleFile(self):
         """
@@ -111,15 +149,11 @@ class Ui_MainWindow:
         """
         Optimize bundles based on the data from the Excel file
         """
-        if self.data.empty:
-            self.showAlert("Error", "Please select an Excel file first.", "error")
-            return
-        data = self.data
-        self.ui.progressBar.setValue(10)
         self.ui.progressLabel.setText("Getting data...")
-
-        data = self.updateQuantities(data)
+        self.ui.progressBar.setValue(10)
+        data = self.get_data(self.workbook)
         if data.empty:
+            self.showAlert("Error", "Invalid path for Excel file.", "error")
             return
 
         # get unique orders
@@ -130,6 +164,8 @@ class Ui_MainWindow:
 
         # create SKU objects for each order
         order_skus = self.create_sku_objects(order_rows)
+
+        order_skus = self.removeInvalids(order_skus)
 
         self.ui.progressBar.setValue(20)
         images_dir = f"{self.workingDir}/images"
@@ -152,39 +188,11 @@ class Ui_MainWindow:
         self.ui.progressBar.setValue(100)
         self.ui.progressLabel.setText("Packing complete!")
 
+        if self.missingDataSKUs:
+            self.showAlert("Missing Data", f"The following SKUs are missing data and could not\nbe included in the optimization:\n\n{'\n'.join(self.missingDataSKUs)}\n\nPlease check the input data.", "warning")
+
         # write the packed bundles to a new sheet in the workbook
         self.write_optimized_bundles(self.workbook, order_bundles)
-
-    def updateQuantities(self, data: pd.DataFrame) -> pd.DataFrame:
-        """
-        Open the "SKU_Quantities" sheet and get the sub-bundle quantities
-        """
-        if "SKU_Quantities" not in self.workbook.sheetnames:
-            self.showAlert("Warning", "Sheet 'SKU_Quantities' not found in the selected file.")
-            return {}
-
-        sku_quantities_sheet = self.workbook["SKU_Quantities"]
-        sku_quantities = pd.DataFrame(sku_quantities_sheet.values, columns=[cell.value for cell in sku_quantities_sheet[1]])
-
-        # the quantities in 'data' must be MULTIPLES of the quantities in 'SKU_Quantities'
-        for _, row in sku_quantities.iterrows():
-            sku_id = row['SKU']
-            if sku_id in data['SKU'].values:
-                # get the quantity of the SKU in the data, order IDs must match
-                if 'Order ID' in data.columns:
-                    order_id = row['Order ID']
-                    sku_qty = data.loc[(data['SKU'] == sku_id) & (data['Order ID'] == order_id), 'SKU Qty'].values[0]
-                else:
-                    continue
-                if order_id == "SO-1013178" and sku_id == "6VR.289.15DWL":
-                    pass
-                # get the quantity of the SKU in the SKU_Quantities sheet
-                sub_bundle_qty = row['Total Quantity']
-                # calculate the new quantity as a multiple of the sub-bundle quantity
-                new_qty = ceil(sku_qty / sub_bundle_qty)
-                data.loc[(data['SKU'] == sku_id) & (data['Order ID'] == order_id), 'SKU Qty'] = new_qty * sub_bundle_qty
-
-        return data
 
     def create_sku_objects(self, order_rows: dict):
         """
@@ -199,6 +207,7 @@ class Ui_MainWindow:
                 for _ in range(quantity):
                     sku = SKU(
                         id=row['SKU'],
+                        bundleqty=row['SKU Qty/Bundle'],
                         width=row['SKU Width (mm)'],
                         height=row['SKU Height (mm)'],
                         length=row['SKU Length (mm)'],
@@ -224,7 +233,8 @@ class Ui_MainWindow:
                    "Order ID",
                    "Bundle No.",
                    "SKU",
-                   "Qty",
+                   "Sub-Bundle Qty",
+                   "Pcs/Sub-Bundle",
                    "SKU Description",
                    "Bundle Actual Width (mm)",
                    "Bundle Actual Height (mm)",
@@ -240,7 +250,7 @@ class Ui_MainWindow:
                 sku_counts = {}
                 for sku in bundle.skus:
                     if sku.id not in sku_counts:
-                        sku_counts[sku.id] = {'qty': 0, 'description': sku.desc, 'weight': sku.weight}
+                        sku_counts[sku.id] = {'qty': 0, 'description': sku.desc, 'weight': sku.weight, 'bundleqty': sku.bundleqty}
                     sku_counts[sku.id]['qty'] += sku.stacked_quantity
                 
                 # calculate bundle actual dimensions and weight
@@ -254,6 +264,7 @@ class Ui_MainWindow:
                         bundle_index + 1,
                         sku_id,
                         sku_data['qty'],
+                        sku_data['bundleqty'],
                         sku_data['description'],
                         actual_width,
                         actual_height,
@@ -303,6 +314,9 @@ class Ui_MainWindow:
         Open the help file in the file explorer
         """
         self.showAlert("Help", """
+        For additional support, please contact Aionex Solutions Ltd.
+        (604-309-8975)
+
         To use this tool, follow these steps:
 
         1. Click on 'Browse' to select your Excel file containing SKU data.
