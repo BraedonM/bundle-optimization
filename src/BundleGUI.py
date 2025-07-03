@@ -177,6 +177,8 @@ class Ui_MainWindow:
         # pack each order's SKUs into bundles
         order_bundles = {}
         for order, skus in order_skus.items():
+            if order == "SO-1013133":
+                pass
             bundles = pack_skus(skus, self.maxWidth, self.maxHeight)
             order_bundles[order] = bundles
 

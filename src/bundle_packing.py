@@ -9,6 +9,21 @@ def pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: in
     Packs SKUs into bundles using a pattern-based algorithm with length stacking support
     """
 
+    def has_sufficient_support(x, y, width, bundle: Bundle, threshold=0.7) -> bool:
+        """
+        Check if at least `threshold` fraction of the bottom width is supported by other SKUs below.
+        """
+        support_segments = []
+        for sku in bundle.skus:
+            if sku.y + sku.height == y:  # SKU is directly underneath
+                overlap_x_start = max(x, sku.x)
+                overlap_x_end = min(x + width, sku.x + sku.width)
+                if overlap_x_end > overlap_x_start:
+                    support_segments.append((overlap_x_start, overlap_x_end))
+
+        total_supported_width = sum(end - start for start, end in support_segments)
+        return (total_supported_width / width) >= threshold
+
     def get_sku_dimensions(sku: SKU, vertical: bool):
         """Return (width, height) for SKU based on orientation"""
         if vertical:
@@ -158,7 +173,9 @@ def pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: in
         return still_remaining
 
     def pack_bundle_with_pattern(available_skus: List[SKU], bundle: Bundle) -> List[SKU]:
-        """Pack a single bundle following the vertical/horizontal pattern with stacking"""
+        """
+        Pack a single bundle following the vertical/horizontal pattern with stacking
+        """
         remaining_skus = available_skus.copy()
         current_y = 0
         is_vertical_row = True
@@ -174,17 +191,49 @@ def pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: in
             # Sort SKUs by weight (heaviest first) for each row
             remaining_skus.sort(key=lambda x: x.weight, reverse=True)
 
+            # Track which SKUs we've already considered for this row to avoid duplicates
+            considered_skus = set()
+
             for i, sku in enumerate(remaining_skus):
+                # Skip if we've already considered this SKU for stacking
+                if id(sku) in considered_skus:
+                    continue
+                    
                 width, height = get_sku_dimensions(sku, is_vertical_row)
 
                 # Check if SKU fits in current row
                 if (current_x + width <= bundle.width and
                     current_y + height <= bundle.height and
                     can_fit_in_bundle(sku, current_x, current_y, is_vertical_row, bundle)):
+                    
+                    # Simulate placement to verify support
+                    x = current_x
+                    y = current_y
+                    if current_y != 0:  # not first row
+                        if not has_sufficient_support(x, y, width, bundle):
+                            break  # Not enough support; start a new row
 
-                    # Calculate stacking
-                    stackable_skus = find_stackable_skus(sku, remaining_skus, len(remaining_skus))
+                    # Calculate stacking - find stackable SKUs from remaining list
+                    stackable_skus = []
+                    max_stack = calculate_max_stack_quantity(sku.length, maxLength)
+                    
+                    if max_stack > 1:
+                        # Look for identical SKUs to stack (excluding the current one)
+                        for j, other_sku in enumerate(remaining_skus):
+                            if (j != i and  # Don't include the current SKU
+                                other_sku.id == sku.id and 
+                                other_sku.width == sku.width and 
+                                other_sku.height == sku.height and
+                                other_sku.length == sku.length and
+                                len(stackable_skus) < max_stack - 1):  # -1 because we already have the base SKU
+                                stackable_skus.append(other_sku)
+                    
                     stack_quantity = len(stackable_skus) + 1
+
+                    # Mark all SKUs in this stack as considered
+                    considered_skus.add(id(sku))
+                    for stackable_sku in stackable_skus:
+                        considered_skus.add(id(stackable_sku))
 
                     row_skus.append((i, sku, current_x, current_y, width, height, stack_quantity, stackable_skus))
                     current_x += width
@@ -193,8 +242,9 @@ def pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: in
             if not row_skus:
                 break  # No more SKUs fit
 
-            # Place the SKUs in this row
-            placed_in_row = []
+            # Place the SKUs in this row and remove them from remaining_skus
+            skus_to_remove = []
+            
             for i, sku, x, y, width, height, stack_quantity, stackable_skus in row_skus:
                 # Determine if rotation is needed
                 original_width, original_height = sku.width, sku.height
@@ -212,21 +262,15 @@ def pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: in
                         sku.width, sku.height = sku.height, sku.width
 
                 bundle.add_sku(sku, x, y, rotated, stack_quantity)
-                placed_in_row.append(i)
+                
+                # Collect SKUs to remove (base SKU + stackable SKUs)
+                skus_to_remove.append(sku)
+                skus_to_remove.extend(stackable_skus)
 
-                # Remove stackable SKUs from remaining list
-                for stackable_sku in stackable_skus:
-                    if stackable_sku in remaining_skus:
-                        remaining_skus.remove(stackable_sku)
-
-            # Remove placed SKUs by object identity (safest)
-            for i, sku, *_ in row_skus:
-                if sku in remaining_skus:
-                    remaining_skus.remove(sku)
-
-                for stackable_sku in stackable_skus:
-                    if stackable_sku in remaining_skus:
-                        remaining_skus.remove(stackable_sku)
+            # Remove all placed SKUs from remaining_skus
+            for sku_to_remove in skus_to_remove:
+                if sku_to_remove in remaining_skus:
+                    remaining_skus.remove(sku_to_remove)
 
             # Move to next row
             current_y += row_height
