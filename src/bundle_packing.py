@@ -1,5 +1,5 @@
-from typing import List, Tuple
-from bundle_classes import SKU, Bundle, PlacedSKU, FILLER_62, FILLER_44
+from typing import List
+from bundle_classes import SKU, Bundle, FILLER_62, FILLER_44
 
 global maxLength
 maxLength = 3680  # Maximum length for bundles
@@ -8,21 +8,6 @@ def pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: in
     """
     Packs SKUs into bundles using a pattern-based algorithm with length stacking support
     """
-
-    def has_sufficient_support(x, y, width, bundle: Bundle, threshold=0.7) -> bool:
-        """
-        Check if at least `threshold` fraction of the bottom width is supported by other SKUs below.
-        """
-        support_segments = []
-        for sku in bundle.skus:
-            if sku.y + sku.height == y:  # SKU is directly underneath
-                overlap_x_start = max(x, sku.x)
-                overlap_x_end = min(x + width, sku.x + sku.width)
-                if overlap_x_end > overlap_x_start:
-                    support_segments.append((overlap_x_start, overlap_x_end))
-
-        total_supported_width = sum(end - start for start, end in support_segments)
-        return (total_supported_width / width) >= threshold
 
     def get_sku_dimensions(sku: SKU, vertical: bool):
         """Return (width, height) for SKU based on orientation"""
@@ -126,8 +111,16 @@ def pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: in
 
                 # Find the best SKU for this position (prefer heavier SKUs)
                 for i, sku in enumerate(still_remaining):
+                    if sku.length <= 609:
+                        continue # Skip short SKUs
                     can_fit, rotated = can_fit_any_orientation(sku, x, y, bundle)
                     if can_fit:
+                        # Check support if not placing on the bottom
+                        if y != 0 and not has_sufficient_support(x, y, 
+                                                               sku.height if rotated else sku.width, 
+                                                               bundle):
+                            continue
+                        
                         # Calculate how many we can stack
                         stackable_skus = find_stackable_skus(sku, still_remaining, len(still_remaining))
                         stack_quantity = len(stackable_skus) + 1
@@ -198,14 +191,14 @@ def pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: in
                 # Skip if we've already considered this SKU for stacking
                 if id(sku) in considered_skus:
                     continue
-                    
+
                 width, height = get_sku_dimensions(sku, is_vertical_row)
 
                 # Check if SKU fits in current row
                 if (current_x + width <= bundle.width and
                     current_y + height <= bundle.height and
                     can_fit_in_bundle(sku, current_x, current_y, is_vertical_row, bundle)):
-                    
+
                     # Simulate placement to verify support
                     x = current_x
                     y = current_y
@@ -216,18 +209,18 @@ def pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: in
                     # Calculate stacking - find stackable SKUs from remaining list
                     stackable_skus = []
                     max_stack = calculate_max_stack_quantity(sku.length, maxLength)
-                    
+
                     if max_stack > 1:
                         # Look for identical SKUs to stack (excluding the current one)
                         for j, other_sku in enumerate(remaining_skus):
                             if (j != i and  # Don't include the current SKU
-                                other_sku.id == sku.id and 
-                                other_sku.width == sku.width and 
+                                other_sku.id == sku.id and
+                                other_sku.width == sku.width and
                                 other_sku.height == sku.height and
                                 other_sku.length == sku.length and
                                 len(stackable_skus) < max_stack - 1):  # -1 because we already have the base SKU
                                 stackable_skus.append(other_sku)
-                    
+
                     stack_quantity = len(stackable_skus) + 1
 
                     # Mark all SKUs in this stack as considered
@@ -244,7 +237,7 @@ def pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: in
 
             # Place the SKUs in this row and remove them from remaining_skus
             skus_to_remove = []
-            
+
             for i, sku, x, y, width, height, stack_quantity, stackable_skus in row_skus:
                 # Determine if rotation is needed
                 original_width, original_height = sku.width, sku.height
@@ -262,7 +255,7 @@ def pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: in
                         sku.width, sku.height = sku.height, sku.width
 
                 bundle.add_sku(sku, x, y, rotated, stack_quantity)
-                
+
                 # Collect SKUs to remove (base SKU + stackable SKUs)
                 skus_to_remove.append(sku)
                 skus_to_remove.extend(stackable_skus)
@@ -298,21 +291,26 @@ def pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: in
     # Main packing logic
     skus.sort(key=lambda x: x.weight, reverse=True)  # Sort by weight initially
     bundles: List[Bundle] = []
+    short_skus = [s for s in skus if s.length <= 609]
+    skus = [s for s in skus if s.length > 609]
     remaining_skus = skus.copy()
+    short_skus_inserted = False  # Flag to prevent double-adding
 
-    while remaining_skus:
+    while remaining_skus or (short_skus and not short_skus_inserted):
         new_bundle = Bundle(bundle_width, bundle_height, maxLength)
 
-        # Check if any remaining SKU can fit in a bundle at all
-        can_fit_any = False
-        for sku in remaining_skus:
-            vert_w, vert_h = get_sku_dimensions(sku, True)
-            horiz_w, horiz_h = get_sku_dimensions(sku, False)
+        # Inject short SKUs *once* if we’re on the last bundle and space remains
+        if not remaining_skus and short_skus and not short_skus_inserted:
+            remaining_skus = short_skus.copy()
+            short_skus = []
+            short_skus_inserted = True
 
-            if ((vert_w <= bundle_width and vert_h <= bundle_height) or
-                (horiz_w <= bundle_width and horiz_h <= bundle_height)):
-                can_fit_any = True
-                break
+        # Check if any SKU can fit at all
+        can_fit_any = any(
+            (min(sku.width, sku.height) <= bundle_width and max(sku.width, sku.height) <= bundle_height)
+            or (max(sku.width, sku.height) <= bundle_width and min(sku.width, sku.height) <= bundle_height)
+            for sku in remaining_skus
+        )
 
         if not can_fit_any:
             break
@@ -322,25 +320,26 @@ def pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: in
         remaining_skus = pack_bundle_with_pattern(remaining_skus, new_bundle)
         after_count = len(remaining_skus)
 
-        # GREEDY OPTIMIZATION: Try to fill remaining space with leftover SKUs
+        # GREEDY OPTIMIZATION
         if remaining_skus and new_bundle.skus:
             remaining_skus = greedy_fill_remaining_space(new_bundle, remaining_skus)
 
+        # If stuck, remove largest and try again
         if before_count == after_count:
-            # No progress made, skip the largest remaining SKU
             if remaining_skus:
                 largest_sku = max(remaining_skus, key=lambda x: x.width * x.height)
                 remaining_skus.remove(largest_sku)
 
-        if new_bundle.skus:  # Only add bundles that have SKUs
-            new_bundle.add_packaging() # Add packaging to bundle (increases weight)
+        if new_bundle.skus:
+            new_bundle.add_packaging()
             bundles.append(new_bundle)
-
     return bundles
+
 
 def add_filler_material(bundle: Bundle) -> None:
     """
     Add filler material to empty spaces in the bundle - aggressive filling
+    Now with support checks for filler placed above other items
     """
     if not bundle.skus:
         return
@@ -430,6 +429,10 @@ def add_filler_material(bundle: Bundle) -> None:
                                 break
                         
                         if not overlap:
+                            # Check support if not placing on the bottom (y != 0)
+                            if y != 0 and not has_sufficient_support(x, y, width, bundle):
+                                continue
+                            
                             area = width * height
                             if area > best_area:
                                 best_area = area
@@ -475,3 +478,18 @@ def pack_skus(skus: List[SKU], bundle_width: int, bundle_height: int) -> List[Bu
         add_filler_material(bundle)
 
     return bundles
+
+def has_sufficient_support(x, y, width, bundle: Bundle, threshold=0.7) -> bool:
+    """
+    Check if at least `threshold` fraction of the bottom width is supported by other SKUs below.
+    """
+    support_segments = []
+    for sku in bundle.skus:
+        if sku.y + sku.height == y:  # SKU is directly underneath
+            overlap_x_start = max(x, sku.x)
+            overlap_x_end = min(x + width, sku.x + sku.width)
+            if overlap_x_end > overlap_x_start:
+                support_segments.append((overlap_x_start, overlap_x_end))
+
+    total_supported_width = sum(end - start for start, end in support_segments)
+    return (total_supported_width / width) >= threshold
