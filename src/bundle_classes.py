@@ -10,6 +10,7 @@ class SKU:
     length: float
     weight: float
     desc: str
+    can_be_bottom: bool = True  # Can this SKU be placed at the bottom of a bundle
 
 @dataclass
 class PlacedSKU(SKU):
@@ -37,6 +38,7 @@ class Bundle:
         The caller is responsible for ensuring it fits.
         """
         placed = PlacedSKU(
+            # SKU properties
             id=sku.id,
             bundleqty=sku.bundleqty,
             width=sku.width,
@@ -44,6 +46,9 @@ class Bundle:
             length=sku.length,
             weight=sku.weight,
             desc=sku.desc,
+            can_be_bottom=sku.can_be_bottom,
+
+            # PlacedSKU properties
             x=x,
             y=y,
             rotated=rotated,
@@ -61,7 +66,8 @@ class Bundle:
         
         max_x = max(sku.x + sku.width for sku in self.skus)
         max_y = max(sku.y + sku.height for sku in self.skus)
-        max_length = max(sku.length for sku in self.skus)
+        # max_length = max(sku.length for sku in self.skus)
+        max_length = 3680 if (max(sku.length for sku in self.skus if sku.length) < 3700) else 7340
         
         return max_x, max_y, max_length
 
@@ -85,11 +91,10 @@ class Bundle:
         """
         Add the SKUs from packaging material to the bundle
         """
-        width = self.width
-        height = self.height
+        width, height, actual_length = self.get_actual_dimensions()
 
         # Add weights
-        if self.max_length <= 3700: # 3680mm with some error
+        if actual_length == 3680:
             self.add_sku(PACK_ANGLE_3680, 0, 0, False)
             self.add_sku(PACK_1_4_19_DUN_3680, 0, 0, False)
             self.add_sku(PACK_2_3_19_DUN_3680, 0, 0, False)
@@ -171,7 +176,7 @@ FILLER_62 = SKU(
 # Packaging SKUs
 PACK_ANGLE_3680 = SKU(
     id="Pack_Angle",
-    bundleqty=1,
+    bundleqty=4,
     width=0,
     height=0,
     length=3660,
@@ -181,7 +186,7 @@ PACK_ANGLE_3680 = SKU(
 
 PACK_ANGLE_7340 = SKU(
     id="Pack_Angle",
-    bundleqty=1,
+    bundleqty=8,
     width=0,
     height=0,
     length=7320,
@@ -191,7 +196,7 @@ PACK_ANGLE_7340 = SKU(
 
 PACK_1_4_19_DUN_3680 = SKU(
     id="Pack_1x4x19_Dun",
-    bundleqty=1,
+    bundleqty=2,
     width=0,
     height=0,
     length=482.6,
@@ -201,7 +206,7 @@ PACK_1_4_19_DUN_3680 = SKU(
 
 PACK_1_4_19_DUN_7340 = SKU(
     id="Pack_1x4x19_Dun",
-    bundleqty=1,
+    bundleqty=4,
     width=0,
     height=0,
     length=965.2,
@@ -211,7 +216,7 @@ PACK_1_4_19_DUN_7340 = SKU(
 
 PACK_2_3_19_DUN_3680 = SKU(
     id="Pack_2x3x19_Dun",
-    bundleqty=1,
+    bundleqty=2,
     width=0,
     height=0,
     length=482.6,
@@ -221,7 +226,7 @@ PACK_2_3_19_DUN_3680 = SKU(
 
 PACK_2_3_19_DUN_7340 = SKU(
     id="Pack_2x3x19_Dun",
-    bundleqty=1,
+    bundleqty=4,
     width=0,
     height=0,
     length=965.2,
@@ -231,7 +236,7 @@ PACK_2_3_19_DUN_7340 = SKU(
 
 PACK_PAD_8_3680 = SKU(
     id="Pack_Pad_8_3600",
-    bundleqty=1,
+    bundleqty=2,
     width=0,
     height=0,
     length=3660,
@@ -241,7 +246,7 @@ PACK_PAD_8_3680 = SKU(
 
 PACK_PAD_8_7340 = SKU(
     id="Pack_Pad_8_7340",
-    bundleqty=1,
+    bundleqty=4,
     width=0,
     height=0,
     length=7320,
@@ -251,7 +256,7 @@ PACK_PAD_8_7340 = SKU(
 
 PACK_PAD_10_3680 = SKU(
     id="Pack_Pad_10_3680",
-    bundleqty=1,
+    bundleqty=2,
     width=0,
     height=0,
     length=3660,
@@ -261,7 +266,7 @@ PACK_PAD_10_3680 = SKU(
 
 PACK_PAD_10_7340 = SKU(
     id="Pack_Pad_10_7340",
-    bundleqty=1,
+    bundleqty=4,
     width=0,
     height=0,
     length=7320,
@@ -271,7 +276,7 @@ PACK_PAD_10_7340 = SKU(
 
 PACK_PAD_13_3680 = SKU(
     id="Pack_Pad_13_3680",
-    bundleqty=1,
+    bundleqty=2,
     width=0,
     height=0,
     length=3660,
@@ -281,7 +286,7 @@ PACK_PAD_13_3680 = SKU(
 
 PACK_PAD_13_7340 = SKU(
     id="Pack_Pad_13_7340",
-    bundleqty=1,
+    bundleqty=4,
     width=0,
     height=0,
     length=7320,
@@ -291,7 +296,7 @@ PACK_PAD_13_7340 = SKU(
 
 PACK_PAD_19_3680 = SKU(
     id="Pack_Pad_19_3680",
-    bundleqty=1,
+    bundleqty=2,
     width=0,
     height=0,
     length=3660,
@@ -301,7 +306,7 @@ PACK_PAD_19_3680 = SKU(
 
 PACK_PAD_19_7340 = SKU(
     id="Pack_Pad_19_7340",
-    bundleqty=1,
+    bundleqty=4,
     width=0,
     height=0,
     length=7320,
@@ -311,7 +316,7 @@ PACK_PAD_19_7340 = SKU(
 
 PACK_SUB_BUNDL_WRP_3680 = SKU(
     id="Pack_Sub_Bundl_Wrp_3680",
-    bundleqty=1,
+    bundleqty=2,
     width=0,
     height=0,
     length=3660,
@@ -321,7 +326,7 @@ PACK_SUB_BUNDL_WRP_3680 = SKU(
 
 PACK_SUB_BUNDL_WRP_7340 = SKU(
     id="Pack_Sub_Bundl_Wrp_7340",
-    bundleqty=1,
+    bundleqty=4,
     width=0,
     height=0,
     length=7320,
@@ -331,7 +336,7 @@ PACK_SUB_BUNDL_WRP_7340 = SKU(
 
 PACK_MST_BUNDL_WRP_3680 = SKU(
     id="Pack_Mst_Bundl_Wrp_3680",
-    bundleqty=1,
+    bundleqty=2,
     width=0,
     height=0,
     length=3660,
@@ -341,7 +346,7 @@ PACK_MST_BUNDL_WRP_3680 = SKU(
 
 PACK_MST_BUNDL_WRP_7340 = SKU(
     id="Pack_Mst_Bundl_Wrp_7340",
-    bundleqty=1,
+    bundleqty=4,
     width=0,
     height=0,
     length=7320,

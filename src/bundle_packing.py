@@ -289,6 +289,7 @@ def pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: in
         return remaining_skus
 
     # Main packing logic
+    global maxLength
     skus.sort(key=lambda x: x.weight, reverse=True)  # Sort by weight initially
     bundles: List[Bundle] = []
     short_skus = [s for s in skus if s.length <= 609]
@@ -334,7 +335,6 @@ def pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: in
             new_bundle.add_packaging()
             bundles.append(new_bundle)
     return bundles
-
 
 def add_filler_material(bundle: Bundle) -> None:
     """
@@ -466,19 +466,6 @@ def calculate_max_stack_quantity(sku_length: float, max_bundle_length: float) ->
     """
     return int(max_bundle_length // sku_length)
 
-def pack_skus(skus: List[SKU], bundle_width: int, bundle_height: int) -> List[Bundle]:
-    """
-    Wrapper function that packs SKUs and adds filler material
-    """
-    bundles = pack_skus_with_pattern(skus, bundle_width, bundle_height)
-
-    # Add filler material and resize bundles
-    for bundle in bundles:
-        bundle.resize_to_content()
-        add_filler_material(bundle)
-
-    return bundles
-
 def has_sufficient_support(x, y, width, bundle: Bundle, threshold=0.7) -> bool:
     """
     Check if at least `threshold` fraction of the bottom width is supported by other SKUs below.
@@ -493,3 +480,19 @@ def has_sufficient_support(x, y, width, bundle: Bundle, threshold=0.7) -> bool:
 
     total_supported_width = sum(end - start for start, end in support_segments)
     return (total_supported_width / width) >= threshold
+
+def pack_skus(skus: List[SKU], bundle_width: int, bundle_height: int) -> List[Bundle]:
+    """
+    Wrapper function that packs SKUs and adds filler material
+    """
+    global maxLength
+    # maxLength = 7340 if ('.289' in '\t'.join([sku.id for sku in skus])) else 3680
+    maxLength = 3680 if (max(sku.length for sku in skus if sku.length) < 3700) else 7340
+    bundles = pack_skus_with_pattern(skus, bundle_width, bundle_height)
+
+    # Add filler material and resize bundles
+    for bundle in bundles:
+        bundle.resize_to_content()
+        add_filler_material(bundle)
+
+    return bundles

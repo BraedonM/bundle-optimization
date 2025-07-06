@@ -41,7 +41,7 @@ class Ui_MainWindow:
         self.missingDataSKUs = []  # to hold SKUs that are missing data in the Excel file
 
 
-    def get_workbook(self):
+    def get_input_workbook(self):
         """
         Open a dialog to pick an Excel file, return the workbook object
         """
@@ -59,6 +59,19 @@ class Ui_MainWindow:
         self.workbook = openpyxl.load_workbook(path)
         self.ui.excelDir.setText(path)
 
+    def get_sub_bundle_data_sheet(self):
+        """
+        Open a dialog to pick an Excel file, return the sheet "Sub-Bundle_Data"
+        """
+        # load the workbook and read the sheet "Sub-Bundle_Data"
+        path = os.path.join(os.path.dirname(__file__), 'Sub-Bundle_Data.xlsx')
+        workbook = openpyxl.load_workbook(path)
+        sheet = workbook["Sub-Bundle_Data"]
+        if not sheet:
+            self.showAlert("Warning", "Sheet 'Sub-Bundle_Data' not found in file.")
+            return None
+        return sheet
+
     def get_data(self, workbook):
         """
         Read data from the 'SO_Input' sheet of the workbook
@@ -67,8 +80,11 @@ class Ui_MainWindow:
         if "SO_Input" not in workbook.sheetnames:
             self.showAlert("Warning", "Sheet 'SO_Input' not found in the selected file.")
             return None
-        so_input = workbook["SO_Input"]
-        sb_data = workbook["Sub-Bundle_Data"]
+        so_input = workbook["SO-PackExportData"]
+        if not so_input:
+            self.showAlert("Warning", "Sheet 'SO-PackExportData' is empty or not found. Using first sheet in the file instead.")
+            so_input = workbook.active  # fallback to the first sheet if 'SO_Input' is not found
+        sb_data = self.get_sub_bundle_data_sheet()
 
         df = pd.DataFrame(columns=[cell.value for cell in so_input[1]])
         sb_df = pd.DataFrame(columns=[cell.value for cell in sb_data[2]])
@@ -212,7 +228,8 @@ class Ui_MainWindow:
                         height=row['SKU Height (mm)'],
                         length=row['SKU Length (mm)'],
                         weight=row['SKU Weight (kg)'],
-                        desc=row['SKU Description']
+                        desc=row['SKU Description'],
+                        can_be_bottom=['Bottom Row Acceptable']
                     )
                     skus.append(sku)
             order_skus[order] = skus
@@ -235,9 +252,11 @@ class Ui_MainWindow:
                    "SKU",
                    "Sub-Bundle Qty",
                    "Pcs/Sub-Bundle",
+                   "Total Pcs",
                    "SKU Description",
-                   "Bundle Actual Width (mm)",
-                   "Bundle Actual Height (mm)",
+                   "Bundle Width (mm)",
+                   "Bundle Height (mm)",
+                   "Bundle Length (mm)",
                    "Bundle Total Weight (kg)",
                    "Note"
                    ]
@@ -265,9 +284,11 @@ class Ui_MainWindow:
                         sku_id,
                         sku_data['qty'],
                         sku_data['bundleqty'],
+                        sku_data['qty'] * sku_data['bundleqty'],
                         sku_data['description'],
                         actual_width,
                         actual_height,
+                        bundle.max_length,
                         total_weight,
                         ""
                     ])
