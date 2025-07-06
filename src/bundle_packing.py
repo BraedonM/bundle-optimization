@@ -188,6 +188,9 @@ def pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: in
             considered_skus = set()
 
             for i, sku in enumerate(remaining_skus):
+                # Don't add sku to first row unless it is able to be placed there
+                if current_y == 0 and not sku.can_be_bottom:
+                    continue
                 # Skip if we've already considered this SKU for stacking
                 if id(sku) in considered_skus:
                     continue

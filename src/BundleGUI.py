@@ -26,7 +26,7 @@ class Ui_MainWindow:
 
     def setupUi(self):
         # Initialize values and connect signals
-        self.ui.fileBrowse.clicked.connect(self.get_workbook)
+        self.ui.fileBrowse.clicked.connect(self.get_input_workbook)
         self.ui.openExample.clicked.connect(self.openExampleFile)
         self.ui.optimizeBundles.clicked.connect(self.optimizeBundles)
         self.ui.openImages.clicked.connect(self.openImages)
@@ -76,14 +76,11 @@ class Ui_MainWindow:
         """
         Read data from the 'SO_Input' sheet of the workbook
         """
-        # get the "SO_Input" sheet
-        if "SO_Input" not in workbook.sheetnames:
-            self.showAlert("Warning", "Sheet 'SO_Input' not found in the selected file.")
-            return None
+        # get the "SO_PackExportData" sheet
         so_input = workbook["SO-PackExportData"]
         if not so_input:
             self.showAlert("Warning", "Sheet 'SO-PackExportData' is empty or not found. Using first sheet in the file instead.")
-            so_input = workbook.active  # fallback to the first sheet if 'SO_Input' is not found
+            so_input = workbook.active  # fallback to the first sheet if is not found
         sb_data = self.get_sub_bundle_data_sheet()
 
         df = pd.DataFrame(columns=[cell.value for cell in so_input[1]])
@@ -93,18 +90,19 @@ class Ui_MainWindow:
             df.loc[len(df)] = row
         for row in sb_data.iter_rows(min_row=3, values_only=True):
             # check for any empty cells in the row
-            if any(cell is None for cell in row):
-                # if row[0] not in self.missingDataSKUs:
-                #     self.missingDataSKUs.append(row[0])  # assuming SKU is in the second column
+            if any(cell is None for cell in [el for el in row][2:]):
                 continue
             sb_df.loc[len(sb_df)] = row
 
         # remove any rows with SKUs that are in the missingDataSKUs list
-        df = df[~df['SKU'].isin(self.missingDataSKUs)]
+        df = df[~df['InventoryID'].isin(self.missingDataSKUs)]
 
         # check if the required columns are present
-        df_cols = "Order ID", "SKU", "SKU Qty", "SKU Qty/Bundle", "SKU Description", "SKU Width (mm)", "SKU Height (mm)", "SKU Length (mm)", "SKU Weight (kg)"
-        for col in df_cols:
+        self.headers = ["OrderType", "OrderNbr", "Bdl_Override", "InventoryID", "Quantity", "Pcs/Bundle", "Can_be_bottom",
+                   "Width_mm", "Height_mm", "Length_mm", "Weight_kg", "UOM", "Description",
+                   "ShipTo", "AddressLine1", "AddressLine2", "City", "State", "Country", "Status", "OrderDate",
+                   "ProdReleaseDate", "SchedShipDate", "TargetArrival", "NotBefore", "ShipVia", "LastModifiedOn"]
+        for col in self.headers:
             if col not in df.columns:
                 # add the column with default values
                 df[col] = None
@@ -113,25 +111,30 @@ class Ui_MainWindow:
         for _, row in sb_df.iterrows():
             sku_id = row['SKU']
             df_rows = []
+            if row['Bottom Row Acceptable']:
+                can_be_bottom = True
+            else:
+                can_be_bottom = False
             for index, df_row in df.iterrows():
-                if sku_id in df_row['SKU']:
+                if sku_id in df_row['InventoryID']:
                     df_rows.append(index)
             for df_row_idx in df_rows:
-                # update the SKU Qty/Bundle column with the value from sb_df
-                df.loc[df_row_idx, 'SKU Qty/Bundle'] = row['Qty/bundle']
-                df.loc[df_row_idx, 'SKU Width (mm)'] = row['Width (mm)']
-                df.loc[df_row_idx, 'SKU Height (mm)'] = row['Height (mm)']
-                df.loc[df_row_idx, 'SKU Length (mm)'] = row['Length (mm)']
-                df.loc[df_row_idx, 'SKU Weight (kg)'] = row['Weight kg/length']
+                # update the Pcs/Bundle column with the value from sb_df
+                df.loc[df_row_idx, 'Pcs/Bundle'] = row['Qty/bundle']
+                df.loc[df_row_idx, 'Width_mm'] = row['Width (mm)']
+                df.loc[df_row_idx, 'Height_mm'] = row['Height (mm)']
+                df.loc[df_row_idx, 'Length_mm'] = row['Length (mm)']
+                df.loc[df_row_idx, 'Weight_kg'] = row['Weight kg/length']
+                df.loc[df_row_idx, 'Can_be_bottom'] = can_be_bottom
 
         # iterate through df and convert qty (in pieces) to qty (in bundles)
         for index, row in df.iterrows():
-            if row['SKU Qty/Bundle'] is not None and row['SKU Qty'] is not None:
+            if row['Pcs/Bundle'] is not None and row['Quantity'] is not None:
                 try:
-                    # convert SKU Qty to SKU Qty/Bundle
-                    df.loc[index, 'SKU Qty'] = ceil(row['SKU Qty'] / row['SKU Qty/Bundle'])
+                    # convert Quantity to Pcs/Bundle
+                    df.loc[index, 'Quantity'] = ceil(row['Quantity'] / row['Pcs/Bundle'])
                 except ZeroDivisionError:
-                    self.showAlert("Error", f"SKU Qty/Bundle cannot be zero for SKU {row['SKU']}. Please check the input data.", "error")
+                    self.showAlert("Error", f"Pcs/Bundle cannot be zero for SKU {row['InventoryID']}. Please check the input data.", "error")
                     return pd.DataFrame()
 
         return df
@@ -173,10 +176,10 @@ class Ui_MainWindow:
             return
 
         # get unique orders
-        unique_orders = data['Order ID'].unique()
+        unique_orders = data['OrderNbr'].unique()
 
         # get array of rows in sorted_data that belong to each order
-        order_rows = {order: data[data['Order ID'] == order] for order in unique_orders}
+        order_rows = {order: data[data['OrderNbr'] == order] for order in unique_orders}
 
         # create SKU objects for each order
         order_skus = self.create_sku_objects(order_rows)
@@ -205,7 +208,7 @@ class Ui_MainWindow:
         self.ui.progressLabel.setText("Packing complete!")
 
         if self.missingDataSKUs:
-            self.showAlert("Missing Data", f"The following SKUs are missing data and could not\nbe included in the optimization:\n\n{'\n'.join(self.missingDataSKUs)}\n\nPlease check the input data.", "warning")
+            self.showAlert("Missing Data", "The following SKUs are missing data and could not\nbe included in the optimization:\n\n" + '\n'.join(self.missingDataSKUs) + "\n\nPlease check the input data.", "warning")
 
         # write the packed bundles to a new sheet in the workbook
         self.write_optimized_bundles(self.workbook, order_bundles)
@@ -219,17 +222,37 @@ class Ui_MainWindow:
             skus = []
             for _, row in rows.iterrows():
                 # get quantity of SKU from the row
-                quantity = row['SKU Qty']
+                quantity = row['Quantity']
                 for _ in range(quantity):
                     sku = SKU(
-                        id=row['SKU'],
-                        bundleqty=row['SKU Qty/Bundle'],
-                        width=row['SKU Width (mm)'],
-                        height=row['SKU Height (mm)'],
-                        length=row['SKU Length (mm)'],
-                        weight=row['SKU Weight (kg)'],
-                        desc=row['SKU Description'],
-                        can_be_bottom=['Bottom Row Acceptable']
+                        id=row['InventoryID'],
+                        bundleqty=row['Pcs/Bundle'],
+                        width=row['Width_mm'],
+                        height=row['Height_mm'],
+                        length=row['Length_mm'],
+                        weight=row['Weight_kg'],
+                        desc=row['Description'],
+                        can_be_bottom=['Bottom Row Acceptable'],
+                        data={ # additional data that will not be changed
+                            'OrderType': row['OrderType'],
+                            'OrderNbr': row['OrderNbr'],
+                            'UOM': row['UOM'],
+                            'Bdl_Override': row['Bdl_Override'],
+                            'ShipTo': row['ShipTo'],
+                            'AddressLine1': row['AddressLine1'],
+                            'AddressLine2': row['AddressLine2'],
+                            'City': row['City'],
+                            'State': row['State'],
+                            'Country': row['Country'],
+                            'Status': row['Status'],
+                            'OrderDate': row['OrderDate'],
+                            'ProdReleaseDate': row['ProdReleaseDate'],
+                            'SchedShipDate': row['SchedShipDate'],
+                            'TargetArrival': row['TargetArrival'],
+                            'NotBefore': row['NotBefore'],
+                            'ShipVia': row['ShipVia'],
+                            'LastModifiedOn': row['LastModifiedOn']
+                        }
                     )
                     skus.append(sku)
             order_skus[order] = skus
@@ -246,21 +269,13 @@ class Ui_MainWindow:
         optimized_sheet = workbook.create_sheet("Optimized_Bundles")
 
         # write headers
-        headers = [
-                   "Order ID",
-                   "Bundle No.",
-                   "SKU",
-                   "Sub-Bundle Qty",
-                   "Pcs/Sub-Bundle",
-                   "Total Pcs",
-                   "SKU Description",
-                   "Bundle Width (mm)",
-                   "Bundle Height (mm)",
-                   "Bundle Length (mm)",
-                   "Bundle Total Weight (kg)",
-                   "Note"
-                   ]
-        optimized_sheet.append(headers)
+        intersect_headers = ['Can_be_bottom']
+        # remove intersect headers from the main headers
+        self.headers = [header for header in self.headers if header not in intersect_headers]
+        # add headers
+        self.headers.insert(5, 'TotalPcs')
+        self.headers.insert(2, 'BundleNbr')
+        optimized_sheet.append(self.headers)
 
         # add data for each order's bundles
         for order, bundles in order_bundles.items():
@@ -269,7 +284,7 @@ class Ui_MainWindow:
                 sku_counts = {}
                 for sku in bundle.skus:
                     if sku.id not in sku_counts:
-                        sku_counts[sku.id] = {'qty': 0, 'description': sku.desc, 'weight': sku.weight, 'bundleqty': sku.bundleqty}
+                        sku_counts[sku.id] = {'qty': 0, 'sku': sku}
                     sku_counts[sku.id]['qty'] += sku.stacked_quantity
                 
                 # calculate bundle actual dimensions and weight
@@ -278,20 +293,47 @@ class Ui_MainWindow:
                 
                 # write each SKU in the bundle to the sheet
                 for sku_id, sku_data in sku_counts.items():
-                    optimized_sheet.append([
-                        order,
-                        bundle_index + 1,
-                        sku_id,
-                        sku_data['qty'],
-                        sku_data['bundleqty'],
-                        sku_data['qty'] * sku_data['bundleqty'],
-                        sku_data['description'],
-                        actual_width,
-                        actual_height,
-                        bundle.max_length,
-                        total_weight,
-                        ""
-                    ])
+                    # check if data is None (this happens for Packaging SKUs)
+                    if sku_data['sku'].data is None:
+                        # give data from another SKU in the order, since they are the same
+                        for _, nested_sku_data in sku_counts.items():
+                            if nested_sku_data['sku'].data is not None:
+                                sku_data['sku'].data = nested_sku_data['sku'].data
+                                break
+                    try:
+                        optimized_sheet.append([
+                            sku_data['sku'].data['OrderType'],
+                            order,
+                            bundle_index + 1,
+                            sku_data['sku'].data['Bdl_Override'],
+                            sku_id,
+                            sku_data['qty'],
+                            sku_data['sku'].bundleqty,
+                            sku_data['qty'] * sku_data['sku'].bundleqty,
+                            actual_width,
+                            actual_height,
+                            bundle.max_length,
+                            total_weight,
+                            sku_data['sku'].data['UOM'],
+                            sku_data['sku'].desc,
+                            sku_data['sku'].data['ShipTo'],
+                            sku_data['sku'].data['AddressLine1'],
+                            sku_data['sku'].data['AddressLine2'],
+                            sku_data['sku'].data['City'],
+                            sku_data['sku'].data['State'],
+                            sku_data['sku'].data['Country'],
+                            sku_data['sku'].data['Status'],
+                            sku_data['sku'].data['OrderDate'],
+                            sku_data['sku'].data['ProdReleaseDate'],
+                            sku_data['sku'].data['SchedShipDate'],
+                            sku_data['sku'].data['TargetArrival'],
+                            sku_data['sku'].data['NotBefore'],
+                            sku_data['sku'].data['ShipVia'],
+                            sku_data['sku'].data['LastModifiedOn'],   
+                        ])
+                    except Exception as e:
+                        self.showAlert("Error", f"Error writing SKU {sku_id} to the sheet: {e}", "error")
+                        return
             # add a blank row after each order's bundles
             optimized_sheet.append([])
 
