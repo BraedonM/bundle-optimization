@@ -18,7 +18,7 @@ def visualize_bundles(bundles: List[Bundle], savePath: str = None) -> None:
     for idx, (bundle, ax) in enumerate(zip(bundles, axs)):
         # Use actual bundle dimensions for visualization
         actual_width, actual_height, max_length = bundle.get_actual_dimensions()
-        
+
         ax.set_title(f"Bundle {idx + 1}\n({actual_width:.0f}x{actual_height:.0f}x{max_length:.0f}mm, {bundle.get_total_weight():.2f}kg)")
         ax.set_xlim(0, actual_width)
         ax.set_ylim(0, actual_height)
@@ -36,9 +36,9 @@ def visualize_bundles(bundles: List[Bundle], savePath: str = None) -> None:
                 else:
                     # Use bright colors for regular SKUs
                     sku_colors[sku.id] = [random.random() * 0.7 + 0.3 for _ in range(3)]
-            
+
             color = sku_colors[sku.id]
-            
+
             # Create rectangle with different border style for filler
             if "Filler" in sku.id:
                 rect = patches.Rectangle(
@@ -73,8 +73,8 @@ def visualize_bundles(bundles: List[Bundle], savePath: str = None) -> None:
                 else:
                     label_text = sku.id
                     
-                ax.text(label_x, label_y, label_text, ha='center', va='center', 
-                       fontsize=6, weight='bold', 
+                ax.text(label_x, label_y, label_text, ha='center', va='center',
+                       fontsize=6, weight='bold',
                        bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.8))
 
     plt.tight_layout()

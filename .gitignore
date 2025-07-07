@@ -2,10 +2,11 @@
 src/venv
 src/.venv
 src/__pycache__
-
-new_data/images
+src/.vscode
 src/build
 src/dist
+
+*/images
 build
 dist
 BundleOptimizer
