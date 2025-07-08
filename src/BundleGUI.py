@@ -6,6 +6,8 @@ import pandas as pd
 from tkinter import filedialog
 import os
 from math import ceil
+from datetime import datetime
+import numpy as np
 
 from bundle_classes import SKU
 from bundle_visualize import visualize_bundles
@@ -23,6 +25,7 @@ class Ui_MainWindow:
     def setupUi(self):
         # Initialize values and connect signals (camelCase, while helper methods are snake_case)
         self.ui.fileBrowse.clicked.connect(self.getInputWorkbook)
+        self.ui.appendBrowse.clicked.connect(self.getAppendWorkbook)
         self.ui.openExample.clicked.connect(self.openExampleFile)
         self.ui.optimizeBundles.clicked.connect(self.optimizeBundles)
         self.ui.openImages.clicked.connect(self.openImages)
@@ -35,6 +38,7 @@ class Ui_MainWindow:
         self.maxLength = 3680
         self.workingDir = None  # to hold the directory of the selected Excel file
         self.missingDataSKUs = []  # to hold SKUs that are missing data in the Excel file
+        self.append_data = False  # to indicate if we are appending data to an existing workbook
 
 ## QT Connection Methods (camelCase)
 
@@ -48,13 +52,26 @@ class Ui_MainWindow:
             filetypes=[("Excel files", "*.xlsx; *.xls; *.xlsm")],
         )
         if not path:
-            return None
+            return
 
         self.workingDir = path.rsplit('/', 1)[0]  # get the directory of the selected file
 
         # load the workbook and read the sheet "SO_Input"
-        self.workbook = openpyxl.load_workbook(path)
         self.ui.excelDir.setText(path)
+
+    def getAppendWorkbook(self):
+        """
+        Get the workbook of Optimized data to append new data to
+        """
+        path = filedialog.askopenfilename(
+            title="Select an Excel file to append optimized data to",
+            filetypes=[("Excel files", "*.xlsx; *.xls; *.xlsm")],
+        )
+        if not path:
+            return
+
+        # load the workbook and read the sheet "SO_Input"
+        self.ui.appendDir.setText(path)
 
     def openExampleFile(self):
         """
@@ -72,13 +89,28 @@ class Ui_MainWindow:
         """
         self.ui.progressLabel.setText("Getting data...")
         self.ui.progressBar.setValue(10)
-        data = self.get_data(self.workbook)
-        if data.empty:
+        # Get data from input workbook
+        try:
+            self.workbook = openpyxl.load_workbook(self.ui.excelDir.text())
+            data = self.get_data(self.workbook)
+        except Exception as e:
             self.show_alert("Error", "Invalid path for Excel file.", "error")
+            self.ui.progressBar.setValue(0)
+            self.ui.progressLabel.setText("")
             return
 
         # get unique orders
-        unique_orders = data['OrderNbr'].unique()
+        unique_orders = list(data['OrderNbr'].unique())
+
+        if self.ui.appendDir.text():
+            self.appendWorkbook = openpyxl.load_workbook(self.ui.appendDir.text())
+            self.append_data = True
+            unique_orders, self.appendWorkbook = self.remove_optimized_orders(unique_orders, self.appendWorkbook)
+            if not unique_orders:
+                self.show_alert("No Orders", "All selected orders have already been optimized in the append workbook.", "info")
+                self.ui.progressBar.setValue(0)
+                self.ui.progressLabel.setText("")
+                return
 
         # get array of rows in sorted_data that belong to each order
         order_rows = {order: data[data['OrderNbr'] == order] for order in unique_orders}
@@ -109,6 +141,8 @@ class Ui_MainWindow:
         self.images_dir = images_dir
 
         # write the packed bundles to a new sheet in the workbook
+        if self.append_data:
+            self.workbook = self.appendWorkbook
         self.write_optimized_bundles(self.workbook, order_bundles)
 
         self.ui.progressBar.setValue(100)
@@ -184,6 +218,49 @@ class Ui_MainWindow:
             self.show_alert("Warning", "Sheet 'Sub-Bundle_Data' not found in file.")
             return None
         return sheet
+
+    def remove_optimized_orders(self, orders, workbook):
+        """
+        Remove orders that are already optimized in the workbook
+        """
+        if "Optimized_Bundles" not in workbook.sheetnames:
+            return orders, workbook
+        optimized_sheet = workbook["Optimized_Bundles"]
+        # remove table formatting if it exists
+        if "OptimizedBundlesTable" in optimized_sheet.tables:
+            del optimized_sheet.tables["OptimizedBundlesTable"]
+        # find orders that have been updated since last optimization (the 'OptimizedOn' column is earlier than the 'LastModifiedOn' column)
+        found_order = False
+        for order in orders:
+            # get the last modified date of the order from the optimized sheet
+            for rowIdx in range(optimized_sheet.max_row, 0, -1):
+                row = optimized_sheet[rowIdx]
+                if row[1].value == order:
+                    last_modified_on = row[-2].value
+                    optimized_on = row[-1].value
+                    # convert to datetime if not None
+                    if last_modified_on and optimized_on:
+                        last_modified_on = datetime.strptime(last_modified_on, "%Y-%m-%d")
+                        optimized_on = datetime.strptime(optimized_on, "%Y-%m-%d")
+                        if last_modified_on <= optimized_on: # modified earlier than it was optimized
+                            orders = [o for o in orders if o != order]  # remove the order from the list
+                        else:
+                            if not found_order:
+                                found_order = True
+                                optimized_sheet.row_dimensions[rowIdx + 1].outlineLevel = 0
+                                optimized_sheet.delete_rows(rowIdx + 1, 1)  # remove blank row that separates orders
+                            optimized_sheet.row_dimensions[rowIdx].outlineLevel = 0
+                            optimized_sheet.delete_rows(rowIdx, 1)  # remove the row from the optimized sheet
+            found_order = False
+
+        # save the workbook after removing orders
+        try:
+            optimized_sheet.append([])  # add a blank row at the end to separate orders
+            workbook.save(self.ui.appendDir.text())
+        except Exception as e:
+            self.show_alert("Error", f"Error with the existing optimized data file. Is it already open? Error: {e}", "error")
+            return [], workbook
+        return orders, workbook
 
     def get_data(self, workbook):
         """
@@ -328,9 +405,14 @@ class Ui_MainWindow:
         Write the packed bundles to a new sheet in the workbook
         """
         # create a new sheet for the optimized bundles
-        if "Optimized_Bundles" in workbook.sheetnames:
-            del workbook["Optimized_Bundles"]
-        optimized_sheet = workbook.create_sheet("Optimized_Bundles")
+        if "SO-PackExportData" in workbook.sheetnames:
+            del workbook["SO-PackExportData"]
+        if not self.append_data:
+            if "Optimized_Bundles" in workbook.sheetnames:
+                del workbook["Optimized_Bundles"]
+            optimized_sheet = workbook.create_sheet("Optimized_Bundles")
+        else:
+            optimized_sheet = workbook["Optimized_Bundles"]
 
         # write headers
         intersect_headers = ['Can_be_bottom']
@@ -339,7 +421,9 @@ class Ui_MainWindow:
         # add headers
         self.headers.insert(6, 'TotalPcs')
         self.headers.insert(2, 'BundleNbr')
-        optimized_sheet.append(self.headers)
+        self.headers.append('OptimizedOn')
+        if not self.append_data:
+            optimized_sheet.append(self.headers)
 
         top_groups = []
         bottom_groups = []
@@ -396,41 +480,58 @@ class Ui_MainWindow:
                             sku_data['sku'].data['State'],
                             sku_data['sku'].data['Country'],
                             sku_data['sku'].data['Status'],
-                            sku_data['sku'].data['OrderDate'],
-                            sku_data['sku'].data['ProdReleaseDate'],
-                            sku_data['sku'].data['SchedShipDate'],
+                            sku_data['sku'].data['OrderDate'].strftime("%Y-%m-%d") if sku_data['sku'].data['OrderDate'] else None,
+                            sku_data['sku'].data['ProdReleaseDate'].strftime("%Y-%m-%d") if sku_data['sku'].data['ProdReleaseDate'] else None,
+                            sku_data['sku'].data['SchedShipDate'].strftime("%Y-%m-%d") if sku_data['sku'].data['SchedShipDate'] else None,
                             sku_data['sku'].data['TargetArrival'],
                             sku_data['sku'].data['NotBefore'],
                             sku_data['sku'].data['ShipVia'],
-                            sku_data['sku'].data['LastModifiedOn'],
+                            sku_data['sku'].data['LastModifiedOn'].strftime("%Y-%m-%d") if sku_data['sku'].data['LastModifiedOn'] else None,
+                            datetime.now().strftime("%Y-%m-%d"),
                         ])
                         order_row_count += 1
                     except Exception as e:
                         self.show_alert("Error", f"Error writing SKU {sku_id} to the sheet: {e}", "error")
                         return
-                bottom_groups.append([packaging_idx, optimized_sheet.max_row])
+                bottom_groups.append([packaging_idx - 1, optimized_sheet.max_row])
             # group the rows by order number in Excel
             top_groups.append([optimized_sheet.max_row - order_row_count + 2, optimized_sheet.max_row])
             # add a blank row after each order's bundles
             optimized_sheet.append([])
 
         # create a table over the data
+        if "OptimizedBundlesTable" in optimized_sheet.tables:
+            del optimized_sheet.tables["OptimizedBundlesTable"]
         table = openpyxl.worksheet.table.Table(displayName="OptimizedBundlesTable", ref=optimized_sheet.dimensions, tableStyleInfo=openpyxl.worksheet.table.TableStyleInfo(
             name="TableStyleMedium9", showFirstColumn=False, showLastColumn=False, showRowStripes=True))
         # resize the table to fit the data
         optimized_sheet.add_table(table)
 
-        for group in top_groups:
-            # group orders together
-            optimized_sheet.row_dimensions.group(start=group[0], end=group[1], hidden=True)
-            for row in range(group[0], group[1]):
+        # if two blank rows in a row, remove the first one
+        for row in range(optimized_sheet.max_row, 1, -1):
+            # 2 consecutive blank rows
+            if optimized_sheet[row][0].value is None and optimized_sheet[row - 1][0].value is None:
+                optimized_sheet.delete_rows(row - 1, 1)
+                optimized_sheet.row_dimensions[row + 1].outlineLevel = 1
+            # if the row is blank, set the outline level to 0
+            if optimized_sheet.row_dimensions[row].outlineLevel == 2:
+                continue
+            if optimized_sheet[row][0].value is None:
+                optimized_sheet.row_dimensions[row].outlineLevel = 0
+                optimized_sheet.row_dimensions[row + 1].outlineLevel = 0
+            # if the row is not blank, set the outline level to 1
+            else:
                 optimized_sheet.row_dimensions[row].outlineLevel = 1
+        optimized_sheet.row_dimensions[2].outlineLevel = 0  # first row is the header, no grouping
 
         for group in bottom_groups:
             # group packaging SKUs together
-            optimized_sheet.row_dimensions.group(start=group[0], end=group[1], hidden=True)
+            optimized_sheet.row_dimensions.group(start=group[0], end=group[1], hidden=False)
             for row in range(group[0], group[1]):
                 optimized_sheet.row_dimensions[row].outlineLevel = 2
+        for row in range(1, optimized_sheet.max_row + 1):
+            optimized_sheet.row_dimensions[row].hidden = False
+
         # save the workbook
         try:
             workbook.save(f"{self.workingDir}/Optimized_Bundles.xlsx")
