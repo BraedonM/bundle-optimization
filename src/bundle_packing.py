@@ -45,10 +45,10 @@ def pack_skus(skus: List[SKU], bundle_width: int, bundle_height: int) -> List[Bu
             base_bundles = _pack_skus_with_pattern(short_skus, bundle_width, bundle_height)
 
         # Pack the initial bundle with this color group
-        if len(base_bundles) == 1:
-            can_try_merge_bundles.extend(base_bundles)
-        else:
-            final_bundles.extend(base_bundles)
+        # if len(base_bundles) == 1:
+        can_try_merge_bundles.extend(base_bundles)
+        # else:
+        #     final_bundles.extend(base_bundles)
 
     # try to merge bundles if they can all fit in one
     merged_bundles = _try_merge_bundles(can_try_merge_bundles, bundle_width, bundle_height)
@@ -63,6 +63,22 @@ def pack_skus(skus: List[SKU], bundle_width: int, bundle_height: int) -> List[Bu
 
 def _try_merge_bundles(bundles: List[Bundle], bundle_width: int, bundle_height: int) -> List[Bundle]:
     """Attempt to merge bundles if they can all fit in one bundle"""
+    best_bundles = []
+    mid_bundles = []
+    bad_bundles = []
+    # goal is to merge bundles with bottom-eligible SKUs first, prioritizing full-length
+    for bundle in bundles:
+        bottom_able_skus = [sku for sku in bundle.skus if sku.can_be_bottom]
+        if bottom_able_skus:
+            if any([sku.length > 7000 for sku in bottom_able_skus]):
+                best_bundles.append(bundle)
+            else:
+                mid_bundles.append(bundle)
+        else:
+            bad_bundles.append(bundle)
+    # sort bundles by size
+    bundles = best_bundles + mid_bundles + bad_bundles
+
     merging_able = True
     while merging_able:
          # pick two bundles and try to merge them
@@ -88,7 +104,7 @@ def _try_merge_bundles(bundles: List[Bundle], bundle_width: int, bundle_height: 
     # After merging, add filler material to each bundle
     for bundle in bundles:
         bundle.resize_to_content()
-        _add_filler_material(bundle)
+        # _add_filler_material(bundle)
 
     return bundles
 
@@ -144,19 +160,17 @@ def _pack_single_bundle(skus: List[SKU], bundle: Bundle) -> List[SKU]:
     ]
     if len(bottom_eligible_skus) > 0:
         # Pack bottom row first if eligible SKUs exist
-        bottom_eligible_skus.sort(key=lambda s: max(s.width, s.height), reverse=True)
-        if len(bottom_eligible_skus) > 2:
-            # If more than 2 eligible SKUs, pack them vertically
-            is_vertical_row = True
-        else:
-            # If 2 or fewer, pack them horizontally
-            is_vertical_row = False
+        # if len(bottom_eligible_skus) > 2:
+        #     # If more than 2 eligible SKUs, pack them vertically
+        is_vertical_row = True
+        # else:
+        #     # If 2 or fewer, pack them horizontally
+        #     is_vertical_row = False
         row_height = _place_bottom_row(bundle, bottom_eligible_skus, remaining_skus, is_vertical_row)
         current_y += row_height
         if row_height / bundle.height < 0.1:
             is_vertical_row = not is_vertical_row  # Switch pattern for next row
 
-    first_row = True
     while remaining_skus and current_y < bundle.height:
         # Pack regular row
         row_height = _pack_row(bundle, remaining_skus, current_y, is_vertical_row, bundle.max_length)
@@ -186,14 +200,16 @@ def _pack_single_bundle(skus: List[SKU], bundle: Bundle) -> List[SKU]:
 
 def _place_bottom_row(bundle: Bundle, bottom_eligible_skus: List[SKU], remaining_skus: List[SKU], is_vertical_row: bool) -> int:
     """Place eligible bottom SKUs horizontally in the first row"""
-    bottom_eligible_skus.sort(key=lambda s: max(s.width, s.height), reverse=True)
+    for sku in bottom_eligible_skus:
+        sku.width, sku.height = _get_sku_dimensions(sku, is_vertical_row)
+    bottom_eligible_skus.sort(key=lambda s: s.height, reverse=False)
 
     current_x = 0
     row_height = 0
     row_skus = []
 
     for sku in bottom_eligible_skus[:]:
-        sku.width, sku.height = _get_sku_dimensions(sku, is_vertical_row)
+        # sku.width, sku.height = _get_sku_dimensions(sku, is_vertical_row)
         if (current_x + sku.width <= bundle.width and
             (row_height == 0 or sku.height <= row_height) and
             _can_fit_in_bundle(sku, current_x, 0, is_vertical_row, bundle)):
@@ -216,7 +232,13 @@ def _pack_row(bundle: Bundle, remaining_skus: List[SKU], current_y: int, is_vert
     current_x = 0
     considered_skus = set()
 
-    remaining_skus.sort(key=lambda x: max(x.height, x.width), reverse=True)
+    # group into can_be_bottom SKUs and non-can_be_bottom SKUs
+    # can_be_bottom_skus = [sku for sku in remaining_skus if sku.can_be_bottom]
+    # non_bottom_skus = [sku for sku in remaining_skus if not sku.can_be_bottom]
+    # can_be_bottom_skus.sort(key=lambda s: max(s.width, s.height), reverse=True)
+    # non_bottom_skus.sort(key=lambda s: max(s.width, s.height), reverse=True)
+    # # Prioritize can_be_bottom SKUs first
+    # remaining_skus = can_be_bottom_skus + non_bottom_skus
 
     for i, sku in enumerate(remaining_skus):
         if id(sku) in considered_skus:

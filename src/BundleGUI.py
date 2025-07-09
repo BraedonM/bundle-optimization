@@ -164,7 +164,18 @@ class Ui_MainWindow:
             # write the missing SKUs to a file
             with open(f"{self.workingDir}/missing_data_skus.txt", 'w') as f:
                 f.write("The following SKUs are missing data and could not be included in the optimization:\n\n")
-                f.write('\n'.join(self.missingDataSKUs))
+                # group by order number
+                missing_skus_by_order = {}
+                for sku in self.missingDataSKUs:
+                    order_nbr = sku.data['OrderNbr']
+                    if order_nbr not in missing_skus_by_order:
+                        missing_skus_by_order[order_nbr] = []
+                    missing_skus_by_order[order_nbr].append(sku.id)
+                for order_nbr, skus in missing_skus_by_order.items():
+                    f.write(f"Order {order_nbr}:\n")
+                    for sku in skus:
+                        f.write(f"- {sku}\n")
+                    f.write("\n")
 
     def openImages(self):
         """
@@ -303,7 +314,7 @@ class Ui_MainWindow:
             sb_df.loc[len(sb_df)] = row
 
         # remove any rows with SKUs that are in the missingDataSKUs list
-        df = df[~df['InventoryID'].isin(self.missingDataSKUs)]
+        df = df[~df['InventoryID'].isin([sku.id for sku in self.missingDataSKUs])]
 
         # check if the required columns are present
         self.headers = ["OrderType", "OrderNbr", "Bdl_Override", "InventoryID", "Quantity", "Pcs/Bundle", "Can_be_bottom",
@@ -360,7 +371,8 @@ class Ui_MainWindow:
             for sku in skus:
                 if sku.width is None or sku.height is None or sku.length is None or sku.weight is None:
                     if sku.id not in self.missingDataSKUs:
-                        self.missingDataSKUs.append(sku.id)  # add to missing data SKUs list
+                        # self.missingDataSKUs.append(sku.id)  # add to missing data SKUs list
+                        self.missingDataSKUs.append(sku)  # add to missing data SKUs list
                 else:
                     valid_skus.append(sku)
             order_skus[order] = valid_skus
