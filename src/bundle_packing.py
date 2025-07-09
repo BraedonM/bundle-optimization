@@ -96,8 +96,12 @@ def _pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: i
     """Pack SKUs into bundles using pattern-based algorithm"""
     if not skus:
         return []
-    
     skus.sort(key=lambda x: max(x.height, x.width), reverse=True)
+    
+    if not any (sku.can_be_bottom for sku in skus):
+        # If no SKU can be bottom, set all to True
+        for sku in skus:
+            sku.can_be_bottom = True
     bundles = []
     remaining_skus = skus.copy()
 
@@ -268,7 +272,7 @@ def _pack_row(bundle: Bundle, remaining_skus: List[SKU], current_y: int, is_vert
     return row_height
 
 def _add_filler_material(bundle: Bundle) -> None:
-    """Add filler material to empty spaces"""
+    """Add filler material to empty spaces, avoiding edges when possible"""
     if not bundle.skus:
         return
     
@@ -290,15 +294,33 @@ def _add_filler_material(bundle: Bundle) -> None:
             for y in range(0, int(bundle.height), grid_size):
                 candidate_points.add((x, y))
 
-        # Sort by potential area
+        # Sort by potential area and interior priority
         point_priorities = []
         for x, y in candidate_points:
             potential_area = _calculate_potential_area(x, y, bundle)
-            point_priorities.append((potential_area, x, y))
+            
+            # Calculate distance to nearest edge
+            dist_left = x
+            dist_right = bundle.width - x
+            dist_top = bundle.height - y
+            dist_bottom = y
+            min_dist = min(dist_left, dist_right, dist_top, dist_bottom)
+            
+            # Prioritize interior points (min_dist > 50mm gets bonus)
+            interior_bonus = 1.0
+            if min_dist > 50:
+                interior_bonus = 2.0  # Double priority for interior points
+                
+            point_priorities.append((potential_area * interior_bonus, min_dist, x, y))
         
-        point_priorities.sort(key=lambda p: (-p[0], p[2], p[1]))
+        # Sort by potential area (with bonus) then by distance to edge
+        point_priorities.sort(key=lambda p: (-p[0], -p[1]))
         
-        for _, x, y in point_priorities:
+        for _, min_dist, x, y in point_priorities:
+            # Skip bottom row for filler
+            if y == 0:
+                continue
+                
             best_filler, best_config = _find_best_filler(x, y, fillers, bundle)
             
             if best_filler and best_config:
@@ -373,7 +395,9 @@ def _can_place_sku_at_position(sku: SKU, x: int, y: int, width: int, height: int
     """Check if SKU can be placed at specific position with given dimensions"""
     if x + width > bundle.width or y + height > bundle.height:
         return False
-    
+    if y < 5 and (not sku.can_be_bottom or (bundle.max_length == 7340 and sku.length < 3700)):
+        return False
+
     for placed_sku in bundle.skus:
         if (x < placed_sku.x + placed_sku.width and
             x + width > placed_sku.x and
@@ -435,10 +459,11 @@ def _calculate_potential_area(x: int, y: int, bundle: Bundle) -> int:
     return max_width * max_height
 
 def _find_best_filler(x: int, y: int, fillers: List[SKU], bundle: Bundle) -> Tuple[SKU, Tuple[int, int, bool]]:
-    """Find best filler for a position"""
+    """Find best filler for a position, avoiding edges when possible"""
     best_filler = None
     best_config = None
     best_area = 0
+    min_edge_distance = 0
     
     for filler in fillers:
         orientations = [
@@ -447,23 +472,35 @@ def _find_best_filler(x: int, y: int, fillers: List[SKU], bundle: Bundle) -> Tup
         ]
         
         for width, height, rotated in orientations:
-            if _can_place_sku_at_position(filler, x, y, width, height, bundle):
-                if y != 0 and not _has_sufficient_support(x, y, width, bundle):
-                    continue
+            if not _can_place_sku_at_position(filler, x, y, width, height, bundle):
+                continue
                 
-                area = width * height
-                if area > best_area:
-                    best_area = area
-                    best_filler = filler
-                    best_config = (width, height, rotated)
+            if y != 0 and not _has_sufficient_support(x, y, width, bundle):
+                continue
+            
+            # Calculate distance to nearest edge
+            dist_left = x
+            dist_right = bundle.width - (x + width)
+            dist_top = bundle.height - (y + height)
+            dist_bottom = y
+            current_min_dist = min(dist_left, dist_right, dist_top, dist_bottom)
+            
+            area = width * height
+            # Prefer fillers that are farther from edges
+            if (current_min_dist > min_edge_distance or 
+                (current_min_dist == min_edge_distance and area > best_area)):
+                best_area = area
+                best_filler = filler
+                best_config = (width, height, rotated)
+                min_edge_distance = current_min_dist
     
     return best_filler, best_config
 
 def fill_remaining_greedy(bundle: Bundle, remaining_skus: List[SKU]) -> List[SKU]:
-    """Fill remaining gaps in bundle with greedy placement approach"""
+    """Fill remaining gaps in bundle with greedy placement approach, avoiding filler on edges"""
     if not remaining_skus:
         return remaining_skus
-        
+
     placed_any = True
     while placed_any and remaining_skus:
         placed_any = False
@@ -479,28 +516,28 @@ def fill_remaining_greedy(bundle: Bundle, remaining_skus: List[SKU]) -> List[SKU
             for y in range(0, bundle.height, grid_size):
                 candidate_points.add((x, y))
         candidate_points = sorted(candidate_points, key=lambda p: (p[1], p[0]))  # Sort by y then x
-        
+
         # Try largest SKUs first
         remaining_skus.sort(key=lambda s: s.width * s.height, reverse=True)
-        
+
         for sku in remaining_skus[:]:  # Iterate over copy
             for rotated in [False, True]:
                 w = sku.width if not rotated else sku.height
                 h = sku.height if not rotated else sku.width
-                
+
                 # Skip if too big for bundle
                 if w > bundle.width or h > bundle.height:
                     continue
-                    
+
                 for (x, y) in candidate_points:
                     if x + w > bundle.width or y + h > bundle.height:
                         continue
-                        
+
                     if _can_place_sku_at_position(sku, x, y, w, h, bundle):
                         # Check support if not on bottom
                         if y > 0 and not _has_sufficient_support(x, y, w, bundle):
                             continue
-                            
+
                         # Place the SKU
                         bundle.add_sku(sku, x, y, rotated)
                         remaining_skus.remove(sku)

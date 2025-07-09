@@ -114,8 +114,14 @@ class Ui_MainWindow:
         else:
             # delete existing file
             self.append_data = False
-            if os.path.exists(f"{self.workingDir}/Optimized_Bundles.xlsx"):
-                os.remove(f"{self.workingDir}/Optimized_Bundles.xlsx")
+            try:
+                if os.path.exists(f"{self.workingDir}/Optimized_Bundles.xlsx"):
+                    os.remove(f"{self.workingDir}/Optimized_Bundles.xlsx")
+            except Exception as e:
+                self.show_alert("Error", f"Error accessing Optimized_Bundles.xlsx file: {e}", "error")
+                self.ui.progressBar.setValue(0)
+                self.ui.progressLabel.setText("")
+                return
 
         # get array of rows in sorted_data that belong to each order
         order_rows = {order: data[data['OrderNbr'] == order] for order in unique_orders}
