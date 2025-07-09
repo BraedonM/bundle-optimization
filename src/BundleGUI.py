@@ -111,6 +111,11 @@ class Ui_MainWindow:
                 self.ui.progressBar.setValue(0)
                 self.ui.progressLabel.setText("")
                 return
+        else:
+            # delete existing file
+            self.append_data = False
+            if os.path.exists(f"{self.workingDir}/Optimized_Bundles.xlsx"):
+                os.remove(f"{self.workingDir}/Optimized_Bundles.xlsx")
 
         # get array of rows in sorted_data that belong to each order
         order_rows = {order: data[data['OrderNbr'] == order] for order in unique_orders}
@@ -187,16 +192,21 @@ class Ui_MainWindow:
 
         To use this tool, follow these steps:
 
-        1. Click on 'Browse' to select your Excel file containing SKU data.
+        1. Click on the first 'Browse' button to select your Excel file
+           containing SKU data.
             - If you are unsure how to format your Excel file,
               you can click on 'Open Example File' to open a sample file.
             - Please format your Excel file according to the example provided.
 
-        2. Click on 'Perform Bundle Optimization' to start the
+        2. If you want to append the optimized data to an existing file,
+           click on the second 'Browse' button to select the Excel file
+           where you want to append the optimized data.
+
+        3. Click on 'Perform Bundle Optimization' to start the
            optimization process.
            Wait for the progress bar to complete.
 
-        3. Once the optimization is complete, you can:
+        4. Once the optimization is complete, you can:
             - Click on 'Open Images Folder' to view the generated bundle images.
             - Click on 'Open Resultant Excel File' to view the optimized
               bundle data in an Excel file.
@@ -444,7 +454,7 @@ class Ui_MainWindow:
                 total_weight = bundle.get_total_weight()
 
                 packaging_skus_active = False
-                packaging_idx = 0
+                packaging_idx = 2
                 # write each SKU in the bundle to the sheet
                 for sku_id, sku_data in sku_counts.items():
                     if "Pack_Angle" in sku_id and not packaging_skus_active:
@@ -493,7 +503,8 @@ class Ui_MainWindow:
                     except Exception as e:
                         self.show_alert("Error", f"Error writing SKU {sku_id} to the sheet: {e}", "error")
                         return
-                bottom_groups.append([packaging_idx - 1, optimized_sheet.max_row])
+                if packaging_skus_active:
+                    bottom_groups.append([packaging_idx - 1, optimized_sheet.max_row])
             # group the rows by order number in Excel
             top_groups.append([optimized_sheet.max_row - order_row_count + 2, optimized_sheet.max_row])
             # add a blank row after each order's bundles
@@ -534,7 +545,10 @@ class Ui_MainWindow:
 
         # save the workbook
         try:
-            workbook.save(f"{self.workingDir}/Optimized_Bundles.xlsx")
+            if self.append_data:
+                workbook.save(self.ui.appendDir.text())
+            else:
+                workbook.save(f"{self.workingDir}/Optimized_Bundles.xlsx")
         except Exception as e:
             self.show_alert("Error", f"Error saving the file. Is it already open? Error: {e}", "error")
             return

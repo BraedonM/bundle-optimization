@@ -8,7 +8,10 @@ from bundle_classes import Bundle
 
 def visualize_bundles(bundles: List[Bundle], savePath: str = None) -> None:
     num_bundles = len(bundles)
-    fig, axs = plt.subplots(1, num_bundles, figsize=(6 * num_bundles, 6))
+    try:
+        fig, axs = plt.subplots(1, num_bundles, figsize=(6 * num_bundles, 6))
+    except ValueError:
+        return
 
     sku_colors = {}
 

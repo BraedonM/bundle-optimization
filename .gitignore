@@ -5,6 +5,7 @@ src/__pycache__
 src/.vscode
 src/build
 src/dist
+src/new
 
 */images
 build
