@@ -369,7 +369,7 @@ color: rgb(9, 9, 9);</string>
      </property>
      <property name="maximumSize">
       <size>
-       <width>676</width>
+       <width>16777215</width>
        <height>144</height>
       </size>
      </property>

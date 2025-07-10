@@ -19,6 +19,8 @@ def visualize_bundles(bundles: List[Bundle], savePath: str = None) -> None:
         axs = [axs]
 
     for idx, (bundle, ax) in enumerate(zip(bundles, axs)):
+        # Sort skus by size
+        bundle.skus.sort(key=lambda sku: (sku.width * sku.height), reverse=True)
         # Use actual bundle dimensions for visualization
         actual_width, actual_height, max_length = bundle.get_actual_dimensions()
 
@@ -30,7 +32,6 @@ def visualize_bundles(bundles: List[Bundle], savePath: str = None) -> None:
         ax.set_yticks([])
         ax.grid(False)
         
-        # Group SKUs by their x and y coordinates
         sku_locations = {}
         for sku in bundle.skus:
             loc_key = (sku.x, sku.y)
