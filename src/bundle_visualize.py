@@ -29,6 +29,14 @@ def visualize_bundles(bundles: List[Bundle], savePath: str = None) -> None:
         ax.set_xticks([])
         ax.set_yticks([])
         ax.grid(False)
+        
+        # Group SKUs by their x and y coordinates
+        sku_locations = {}
+        for sku in bundle.skus:
+            loc_key = (sku.x, sku.y)
+            if loc_key not in sku_locations:
+                sku_locations[loc_key] = []
+            sku_locations[loc_key].append(sku)
 
         for sku in bundle.skus:
             # Assign consistent colors, with different shades for filler materials
@@ -65,20 +73,31 @@ def visualize_bundles(bundles: List[Bundle], savePath: str = None) -> None:
                 )
             ax.add_patch(rect)
 
+        for loc_key, skus in sku_locations.items():
+            larger_sku = max(skus, key=lambda s: s.width * s.height)
             # Label with SKU ID and quantity if stacked
-            if sku.width > 15 and sku.height > 10:
-                label_x = sku.x + sku.width / 2
-                label_y = sku.y + sku.height / 2
-                
-                # Show stack quantity if > 1
-                if sku.stacked_quantity > 1:
-                    label_text = f"{sku.id}\n(x{sku.stacked_quantity})"
+            label_x = larger_sku.x + larger_sku.width / 2
+            label_y = larger_sku.y + larger_sku.height / 2
+            skus_same = {}
+            for sku in skus:
+                if sku.height == 0 or sku.width == 0:
+                    continue
+                if sku.id not in skus_same:
+                    skus_same[sku.id] = 0
+                skus_same[sku.id] += 1
+
+            label_text = ""
+            for sku_id, quantity in skus_same.items():
+                if label_text:
+                    label_text += "\n"
+                if quantity > 1:
+                    label_text += f"{sku_id}\n(x{quantity})"
                 else:
-                    label_text = sku.id
-                    
-                ax.text(label_x, label_y, label_text, ha='center', va='center',
-                       fontsize=6, weight='bold',
-                       bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.8))
+                    label_text += sku_id
+
+            ax.text(label_x, label_y, label_text, ha='center', va='center',
+                   fontsize=4, weight='bold',
+                   bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.8))
 
     plt.tight_layout()
     if savePath:

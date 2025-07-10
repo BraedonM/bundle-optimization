@@ -482,7 +482,7 @@ class Ui_MainWindow:
                 for sku in bundle.skus:
                     if sku.id not in sku_counts:
                         sku_counts[sku.id] = {'qty': 0, 'sku': sku}
-                    sku_counts[sku.id]['qty'] += sku.stacked_quantity
+                    sku_counts[sku.id]['qty'] += 1
 
                 # calculate bundle actual dimensions and weight
                 actual_width, actual_height, _ = bundle.get_actual_dimensions()

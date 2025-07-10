@@ -185,7 +185,7 @@ def _pack_single_bundle(skus: List[SKU], bundle: Bundle) -> List[SKU]:
             break
 
         current_y += row_height
-        remaining_skus = fill_row_greedy(bundle, remaining_skus, current_y)
+        # remaining_skus = fill_row_greedy(bundle, remaining_skus, current_y)
 
         # Update pattern for next row
         if is_vertical_row:
@@ -200,7 +200,7 @@ def _pack_single_bundle(skus: List[SKU], bundle: Bundle) -> List[SKU]:
                 horizontal_start_y = 0
 
     # Fill remaining gaps after initial packing
-    remaining_skus = fill_remaining_greedy(bundle, remaining_skus)
+    # remaining_skus = fill_remaining_greedy(bundle, remaining_skus)
 
     return remaining_skus
 
@@ -221,7 +221,7 @@ def _place_bottom_row(bundle: Bundle, bottom_eligible_skus: List[SKU], remaining
             (row_height == 0 or sku.height <= row_height) and
             _can_fit_in_bundle(sku, current_x, 0, is_vertical_row, bundle)):
 
-            row_skus.append((sku, current_x, 0, is_vertical_row, 1))
+            row_skus.append((sku, current_x, 0, is_vertical_row))
             current_x += sku.width
             row_height = max(row_height, sku.height)
             bottom_eligible_skus.remove(sku)
@@ -229,8 +229,8 @@ def _place_bottom_row(bundle: Bundle, bottom_eligible_skus: List[SKU], remaining
             BOTTOM_ROW_LENGTH = current_x
 
     # Place the row
-    for sku, x, y, rotated, qty in row_skus:
-        bundle.add_sku(sku, x, y, rotated, qty)
+    for sku, x, y, rotated in row_skus:
+        bundle.add_sku(sku, x, y, rotated)
 
     return row_height
 
@@ -258,15 +258,18 @@ def _pack_row(bundle: Bundle, remaining_skus: List[SKU], current_y: int, is_vert
 
             # Find stackable SKUs
             stackable_skus = find_stackable_skus(sku, remaining_skus, i, max_length)
-            stack_quantity = len(stackable_skus) + 1
+            
+            # Calculate total length and stack quantity
+            total_length = sku.length + sum(s.length for s in stackable_skus)
 
             # Mark all SKUs in this stack as considered
             considered_skus.add(id(sku))
             for stackable_sku in stackable_skus:
                 considered_skus.add(id(stackable_sku))
 
-            row_skus.append((i, sku, current_x, current_y, width, height, stack_quantity, stackable_skus))
+            row_skus.append((i, sku, current_x, current_y, width, height, stackable_skus, total_length))
             current_x += width
+    
     if not row_skus:
         return 0
 
@@ -274,19 +277,35 @@ def _pack_row(bundle: Bundle, remaining_skus: List[SKU], current_y: int, is_vert
     skus_to_remove = []
     row_height = 0
     
-    for i, sku, x, y, width, height, stack_quantity, stackable_skus in row_skus:
+    for i, sku, x, y, width, height, stackable_skus, total_length in row_skus:
         # Apply rotation if needed
         rotated = _should_rotate_sku(sku, is_vertical_row)
         if rotated:
             sku.width, sku.height = sku.height, sku.width
 
-        bundle.add_sku(sku, x, y, rotated, stack_quantity)
+        # Check if all stackable SKUs are identical to the target SKU
+        all_identical = all(_skus_identical(sku, s) for s in stackable_skus)
+        
+        if len(stackable_skus) > 0 and not all_identical:
+            # Mixed-SKU stack: Add each SKU individually
+            # Sort the stack so largest SKUs are in back (added first)
+            all_stack_skus = [sku] + stackable_skus
+            all_stack_skus.sort(key=lambda x: x.length, reverse=True)
+            
+            for stack_sku in all_stack_skus:
+                if rotated and stack_sku != sku:  # Apply rotation to other SKUs if needed
+                    stack_sku.width, stack_sku.height = stack_sku.height, stack_sku.width
+                bundle.add_sku(stack_sku, x, y, rotated)
+        else:
+            # All identical SKUs or single SKU: use original bulk method
+            bundle.add_sku(sku, x, y, rotated)
+        
         row_height = max(row_height, height)
         
         skus_to_remove.append(sku)
         skus_to_remove.extend(stackable_skus)
 
-    # Remove placed SKUs
+    # Remove placed SKUs from remaining list
     for sku_to_remove in skus_to_remove:
         if sku_to_remove in remaining_skus:
             remaining_skus.remove(sku_to_remove)
@@ -347,7 +366,6 @@ def _add_filler_material(bundle: Bundle) -> None:
             
             if best_filler and best_config:
                 width, height, rotated = best_config
-                stack_quantity = _calculate_max_stack_quantity(best_filler.length, MAX_LENGTH)
                 
                 filler_copy = SKU(
                     id=best_filler.id,
@@ -359,7 +377,7 @@ def _add_filler_material(bundle: Bundle) -> None:
                     desc=best_filler.desc
                 )
                 
-                bundle.add_sku(filler_copy, x, y, rotated, stack_quantity)
+                bundle.add_sku(filler_copy, x, y, rotated)
                 placed_any = True
                 break
 
@@ -620,19 +638,49 @@ def _calculate_max_stack_quantity(sku_length: float, max_bundle_length: float) -
     return int(max_bundle_length // sku_length)
 
 def find_stackable_skus(target_sku: SKU, remaining_skus: List[SKU], target_index: int, max_length: int) -> List[SKU]:
-    """Find SKUs that can be stacked with target SKU"""
+    """Find SKUs that can be stacked with target SKU based on combined length"""
     stackable = []
-    max_stack = _calculate_max_stack_quantity(target_sku.length, max_length)
-
-    if max_stack <= 1:
-        return stackable
-
+    current_total_length = target_sku.length
+    
+    # Create a dictionary to track available quantities for each SKU type
+    sku_quantities = {}
     for i, sku in enumerate(remaining_skus):
-        if (i != target_index and _skus_identical(sku, target_sku) and 
-            len(stackable) < max_stack - 1):
-            stackable.append(sku)
-
+        if i != target_index and _skus_compatible_for_stacking(sku, target_sku):
+            sku_key = (sku.id, sku.width, sku.height, sku.length)
+            if sku_key not in sku_quantities:
+                sku_quantities[sku_key] = []
+            sku_quantities[sku_key].append(sku)
+    
+    # Sort SKU types by length (descending) to place larger SKUs in back
+    sorted_sku_types = sorted(sku_quantities.items(), key=lambda x: x[1][0].length, reverse=True)
+    
+    # Add SKUs to stack as long as they fit within max_length
+    for sku_key, available_skus in sorted_sku_types:
+        sku_length = available_skus[0].length
+        
+        # Calculate how many of this SKU type we can fit
+        max_of_this_type = int((max_length - current_total_length) // sku_length)
+        actual_available = len(available_skus)
+        
+        # Take the minimum of what we can fit and what's available
+        quantity_to_add = min(max_of_this_type, actual_available)
+        
+        if quantity_to_add > 0:
+            # Add the required quantity of this SKU type
+            for i in range(quantity_to_add):
+                stackable.append(available_skus[i])
+                current_total_length += sku_length
+        
+        # Stop if we've reached the maximum length
+        if current_total_length >= max_length:
+            break
+    
     return stackable
+
+def _skus_compatible_for_stacking(sku1: SKU, sku2: SKU) -> bool:
+    """Check if two SKUs are compatible for stacking (same cross-sectional dimensions)"""
+    return (sku1.width <= sku2.width and
+            sku1.height <= sku2.height)
 
 def _skus_identical(sku1: SKU, sku2: SKU) -> bool:
     """Check if two SKUs are identical for stacking purposes"""

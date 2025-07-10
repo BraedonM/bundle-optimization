@@ -1,20 +1,8 @@
 The following SKUs are missing data and could not be included in the optimization:
 
-Order 1013624:
-- 6L.72.15BWH
-- 6L.72.15BWH
-- 6BTBS.72.15BWH
-- 7BB.72.15BWH
-- 7BB.72.15BWH
-- 2DE.72.15BWH
-- JT35.72.15BWH
-- 4CA.72.15REM
-- 4CA.72.15REM
-- 4CA.72.15REM
-
-Order 1013465:
-- TUP.71700
-
-Order 1013552:
-- TUP.71600
+Order 1013075:
+- TUP.70600
+- TUP.10500
+- TUP.10500
+- TUP.10500
 

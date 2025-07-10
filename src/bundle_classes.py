@@ -1,3 +1,4 @@
+# bundle_classes.py
 from dataclasses import dataclass
 from typing import List
 
@@ -18,7 +19,6 @@ class PlacedSKU(SKU):
     x: int = 0
     y: int = 0
     rotated: bool = False
-    stacked_quantity: int = 1  # Number of SKUs stacked in this position
 
 @dataclass
 class Bundle:
@@ -33,7 +33,7 @@ class Bundle:
         self.max_length = max_length
         self.skus = []
 
-    def add_sku(self, sku: SKU, x: int, y: int, rotated: bool, stacked_quantity: int = 1) -> PlacedSKU:
+    def add_sku(self, sku: SKU, x: int, y: int, rotated: bool) -> PlacedSKU:
         """
         Places an SKU at a specific location without validation.
         The caller is responsible for ensuring it fits.
@@ -54,7 +54,6 @@ class Bundle:
             x=x,
             y=y,
             rotated=rotated,
-            stacked_quantity=stacked_quantity
         )
         self.skus.append(placed)
         return placed
@@ -75,9 +74,9 @@ class Bundle:
 
     def get_total_weight(self):
         """
-        Calculate total weight including stacked quantities and packaging materials
+        Calculate total weight including packaging materials
         """
-        return sum(sku.weight * sku.stacked_quantity for sku in self.skus)
+        return sum(sku.weight for sku in self.skus)
 
     def resize_to_content(self):
         """
