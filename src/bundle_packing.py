@@ -167,12 +167,7 @@ def _pack_single_bundle(skus: List[SKU], bundle: Bundle) -> List[SKU]:
     ]
     if len(bottom_eligible_skus) > 0:
         # Pack bottom row first if eligible SKUs exist
-        # if len(bottom_eligible_skus) > 2:
-        #     # If more than 2 eligible SKUs, pack them vertically
         is_vertical_row = True
-        # else:
-        #     # If 2 or fewer, pack them horizontally
-        #     is_vertical_row = False
         row_height = _place_bottom_row(bundle, bottom_eligible_skus, remaining_skus, is_vertical_row)
         current_y += row_height
         if row_height / bundle.height < 0.1:
@@ -282,7 +277,13 @@ def _pack_row(bundle: Bundle, remaining_skus: List[SKU], current_y: int, is_vert
         bundle.add_sku(sku, x, y, rotated, stack_quantity)
         row_height = max(row_height, height)
         
-        remaining_skus.remove(sku)
+        skus_to_remove.append(sku)
+        skus_to_remove.extend(stackable_skus)
+
+    # Remove placed SKUs
+    for sku_to_remove in skus_to_remove:
+        if sku_to_remove in remaining_skus:
+            remaining_skus.remove(sku_to_remove)
 
     return row_height
 
@@ -526,7 +527,7 @@ def fill_remaining_greedy(bundle: Bundle, remaining_skus: List[SKU]) -> List[SKU
             candidate_points.add((sku.x + sku.width, sku.y))  # Right of existing SKU
             candidate_points.add((sku.x, sku.y + sku.height))  # Below existing SKU
         # Add grid points for dense coverage
-        grid_size = 10  # 50mm grid for performance
+        grid_size = 50  # 50mm grid for performance
         for x in range(0, bundle.width, grid_size):
             for y in range(0, bundle.height, grid_size):
                 candidate_points.add((x, y))
@@ -551,8 +552,7 @@ def fill_remaining_greedy(bundle: Bundle, remaining_skus: List[SKU]) -> List[SKU
                     if _can_place_sku_at_position(sku, x, y, w, h, bundle):
                         # Check support if not on bottom
                         if y > 0 and not _has_sufficient_support(x, y, w, bundle) or (
-                            y == 0 and (abs(sku.length - bundle.max_length) > 100 or not sku.can_be_bottom)
-                        ):
+                            y == 0 and (abs(sku.length - bundle.max_length) > 100 or not sku.can_be_bottom)):
                             continue
 
                         # Place the SKU
@@ -596,8 +596,7 @@ def fill_row_greedy(bundle: Bundle,
                     if x+w > bundle.width or y+h > y_limit or (y == 0 and abs(sku.length - bundle.max_length) > 100):
                         continue
                     if _can_place_sku_at_position(sku, x, y, w, h, bundle) and \
-                       ((y == 0 and sku.can_be_bottom) or _has_sufficient_support(x, y, w, bundle)):
-                        g = _has_sufficient_support(x, y, w, bundle)
+                        ((y == 0 and sku.can_be_bottom) or _has_sufficient_support(x, y, w, bundle)):
                         if _should_rotate_sku(sku, rot):
                             sku.width, sku.height = sku.height, sku.width
                         bundle.add_sku(sku, x, y, rot)
@@ -635,4 +634,3 @@ def _skus_identical(sku1: SKU, sku2: SKU) -> bool:
             sku1.width == sku2.width and 
             sku1.height == sku2.height and
             sku1.length == sku2.length)
-
