@@ -186,7 +186,7 @@ def _pack_single_bundle(skus: List[SKU], bundle: Bundle) -> List[SKU]:
             break
 
         current_y += row_height
-        # remaining_skus = fill_row_greedy(bundle, remaining_skus, current_y)
+        remaining_skus = fill_row_greedy(bundle, remaining_skus, current_y)
 
         # Update pattern for next row
         if is_vertical_row:
@@ -241,7 +241,12 @@ def _pack_row(bundle: Bundle, remaining_skus: List[SKU], current_y: int, is_vert
     current_x = 0
     considered_skus = set()
     
-    if len(remaining_skus) <= 2 and is_vertical_row and all(max(sku.width, sku.height) > 5 * min(sku.width, sku.height) for sku in remaining_skus):
+    unique_skus = []
+    for sku in remaining_skus:
+        if sku.id not in [s.id for s in unique_skus]:
+            unique_skus.append(sku)
+    
+    if len(unique_skus) <= 2 and is_vertical_row and all(max(sku.width, sku.height) > 3 * min(sku.width, sku.height) for sku in unique_skus):
         is_vertical_row = False  # Force horizontal if only a couple SKUs that are very tall
 
     for i, sku in enumerate(remaining_skus):
