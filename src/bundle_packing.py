@@ -3,6 +3,8 @@ from bundle_classes import SKU, Bundle, FILLER_62, FILLER_44
 import copy
 
 MAX_LENGTH = 3680
+BOTTOM_ROW_LENGTH = 0
+REMOVED_SKUS = set()
 
 def pack_skus(skus: List[SKU], bundle_width: int, bundle_height: int) -> List[Bundle]:
     """Main entry point for packing SKUs into bundles"""
@@ -59,7 +61,7 @@ def pack_skus(skus: List[SKU], bundle_width: int, bundle_height: int) -> List[Bu
     for bundle in final_bundles:
         bundle.add_packaging()  # Add packaging to each bundle
 
-    return override_bundles + final_bundles
+    return override_bundles + final_bundles, REMOVED_SKUS
 
 def _try_merge_bundles(bundles: List[Bundle], bundle_width: int, bundle_height: int) -> List[Bundle]:
     """Attempt to merge bundles if they can all fit in one bundle"""
@@ -117,19 +119,20 @@ def _try_merge_bundles(bundles: List[Bundle], bundle_width: int, bundle_height: 
 
 def _pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: int) -> List[Bundle]:
     """Pack SKUs into bundles using pattern-based algorithm"""
+    global REMOVED_SKUS
     if not skus:
         return []
     skus.sort(key=lambda x: max(x.height, x.width), reverse=True)
     
-    if not any (sku.can_be_bottom for sku in skus):
-        # If no SKU can be bottom, set all to True
-        for sku in skus:
-            sku.can_be_bottom = True
     bundles = []
     remaining_skus = skus.copy()
 
     while remaining_skus:
         # Check if any SKU can fit in a bundle
+        if not any(sku.can_be_bottom for sku in remaining_skus):
+            # If no SKU can be bottom, set all to True
+            for sku in remaining_skus:
+                sku.can_be_bottom = True
         if not _can_any_sku_fit(remaining_skus, bundle_width, bundle_height):
             break
 
@@ -141,6 +144,7 @@ def _pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: i
         # If no progress, skip largest SKU
         if len(remaining_skus) == before_count and remaining_skus:
             largest_sku = max(remaining_skus, key=lambda x: x.width * x.height)
+            REMOVED_SKUS.add(largest_sku)
             remaining_skus.remove(largest_sku)
 
         if bundle.skus:
@@ -170,8 +174,8 @@ def _pack_single_bundle(skus: List[SKU], bundle: Bundle) -> List[SKU]:
         is_vertical_row = True
         row_height = _place_bottom_row(bundle, bottom_eligible_skus, remaining_skus, is_vertical_row)
         current_y += row_height
-        if row_height / bundle.height < 0.1:
-            is_vertical_row = False
+        # if row_height / bundle.height < 0.1:
+        is_vertical_row = False
 
     while remaining_skus and current_y < bundle.height:
         # Pack regular row
@@ -202,6 +206,7 @@ def _pack_single_bundle(skus: List[SKU], bundle: Bundle) -> List[SKU]:
 
 def _place_bottom_row(bundle: Bundle, bottom_eligible_skus: List[SKU], remaining_skus: List[SKU], is_vertical_row: bool) -> int:
     """Place eligible bottom SKUs horizontally in the first row"""
+    global BOTTOM_ROW_LENGTH
     for sku in bottom_eligible_skus:
         sku.width, sku.height = _get_sku_dimensions(sku, is_vertical_row)
     bottom_eligible_skus.sort(key=lambda s: s.height, reverse=True)
@@ -221,6 +226,7 @@ def _place_bottom_row(bundle: Bundle, bottom_eligible_skus: List[SKU], remaining
             row_height = max(row_height, sku.height)
             bottom_eligible_skus.remove(sku)
             remaining_skus.remove(sku)
+            BOTTOM_ROW_LENGTH = current_x
 
     # Place the row
     for sku, x, y, rotated, qty in row_skus:
@@ -243,7 +249,7 @@ def _pack_row(bundle: Bundle, remaining_skus: List[SKU], current_y: int, is_vert
             continue
 
         if (current_x + width <= bundle.width and
-            current_y + height <= bundle.height and
+            current_y + height <= bundle.height and (current_y == 0 or current_y + height <= BOTTOM_ROW_LENGTH) and
             _can_fit_in_bundle(sku, current_x, current_y, is_vertical_row, bundle)):
 
             # Check support for non-bottom rows
@@ -546,7 +552,7 @@ def fill_remaining_greedy(bundle: Bundle, remaining_skus: List[SKU]) -> List[SKU
                     continue
 
                 for (x, y) in candidate_points:
-                    if x + w > bundle.width or y + h > bundle.height:
+                    if x + w > bundle.width or y + h > bundle.height or y + h > BOTTOM_ROW_LENGTH:
                         continue
 
                     if _can_place_sku_at_position(sku, x, y, w, h, bundle):

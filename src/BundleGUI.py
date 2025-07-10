@@ -145,7 +145,7 @@ class Ui_MainWindow:
                 continue
             self.ui.progressBar.setValue(int(round(20 + 70 * (list(order_skus.keys()).index(order) + 1) / len(order_skus))))
             self.ui.progressLabel.setText(f"Packing order {order}...")
-            bundles = pack_skus(skus, self.maxWidth, self.maxHeight)
+            bundles, removed_skus = pack_skus(skus, self.maxWidth, self.maxHeight)
             order_bundles[order] = bundles
 
             visualize_bundles(bundles, f"{images_dir}/Order_{order}.png")
@@ -175,6 +175,23 @@ class Ui_MainWindow:
                     f.write(f"Order {order_nbr}:\n")
                     for sku in skus:
                         f.write(f"- {sku}\n")
+                    f.write("\n")
+        if removed_skus:
+            self.show_alert("Removed SKUs", "There exist InventoryIDs that were removed from the optimization process due to their dimensions.\n\nPlease check the 'removed_skus.txt' file for details.", "warning")
+            # group removed SKUs by order number
+            removed_skus_by_order = {}
+            for sku in removed_skus:
+                order_nbr = sku.data['OrderNbr']
+                if order_nbr not in removed_skus_by_order:
+                    removed_skus_by_order[order_nbr] = []
+                removed_skus_by_order[order_nbr].append(sku)
+            # write the removed SKUs to a file
+            with open(f"{self.workingDir}/removed_skus.txt", 'w') as f:
+                f.write("The following SKUs were removed from the optimization process due to their dimensions:\n\n")
+                for order_nbr, skus in removed_skus_by_order.items():
+                    f.write(f"Order {order_nbr}:\n")
+                    for sku in skus:
+                        f.write(f"- {sku.id} (Width: {sku.width}, Height: {sku.height}, Length: {sku.length}, Weight: {sku.weight})\n")
                     f.write("\n")
 
     def openImages(self):
