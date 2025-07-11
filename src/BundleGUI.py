@@ -170,7 +170,8 @@ class Ui_MainWindow:
                     order_nbr = sku.data['OrderNbr']
                     if order_nbr not in missing_skus_by_order:
                         missing_skus_by_order[order_nbr] = []
-                    missing_skus_by_order[order_nbr].append(sku.id)
+                    if sku.id not in missing_skus_by_order[order_nbr]:
+                        missing_skus_by_order[order_nbr].append(sku.id)
                 for order_nbr, skus in missing_skus_by_order.items():
                     f.write(f"Order {order_nbr}:\n")
                     for sku in skus:
@@ -184,7 +185,8 @@ class Ui_MainWindow:
                 order_nbr = sku.data['OrderNbr']
                 if order_nbr not in removed_skus_by_order:
                     removed_skus_by_order[order_nbr] = []
-                removed_skus_by_order[order_nbr].append(sku)
+                if sku.id not in [sku.id for sku in removed_skus_by_order[order_nbr]]:
+                    removed_skus_by_order[order_nbr].append(sku)
             # write the removed SKUs to a file
             with open(f"{self.workingDir}/removed_skus.txt", 'w') as f:
                 f.write("The following SKUs were removed from the optimization process due to their dimensions:\n\n")

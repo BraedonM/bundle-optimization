@@ -147,7 +147,7 @@ class Ui_BundleOptimizer(object):
         self.verticalLayout_2.addWidget(self.line_2)
         self.frame_12 = QtWidgets.QFrame(parent=BundleOptimizer)
         self.frame_12.setMinimumSize(QtCore.QSize(676, 144))
-        self.frame_12.setMaximumSize(QtCore.QSize(676, 144))
+        self.frame_12.setMaximumSize(QtCore.QSize(16777215, 144))
         self.frame_12.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
         self.frame_12.setFrameShadow(QtWidgets.QFrame.Shadow.Raised)
         self.frame_12.setObjectName("frame_12")
