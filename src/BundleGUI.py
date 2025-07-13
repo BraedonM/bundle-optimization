@@ -5,7 +5,7 @@ import openpyxl
 import pandas as pd
 from tkinter import filedialog
 import os
-from math import ceil
+from math import ceil, floor
 from datetime import datetime
 import numpy as np
 
@@ -374,7 +374,9 @@ class Ui_MainWindow:
             if row['Pcs/Bundle'] is not None and row['Quantity'] is not None:
                 try:
                     # convert Quantity to Pcs/Bundle
-                    df.loc[index, 'Quantity'] = ceil(row['Quantity'] / row['Pcs/Bundle'])
+                    whole_qty = floor(row['Quantity'] / row['Pcs/Bundle'])
+                    fraction_remaining = (row['Quantity'] % row['Pcs/Bundle']) / row['Pcs/Bundle']
+                    df.loc[index, 'Quantity'] = whole_qty + fraction_remaining
                 except ZeroDivisionError:
                     self.show_alert("Error", f"Pcs/Bundle cannot be zero for SKU {row['InventoryID']}. Please check the input data.", "error")
                     return pd.DataFrame()
