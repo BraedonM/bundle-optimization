@@ -45,6 +45,9 @@ def visualize_bundles(bundles: List[Bundle], savePath: str = None) -> None:
                 if "Filler" in sku.id:
                     # Use gray tones for filler materials
                     sku_colors[sku.id] = [0.7, 0.7, 0.7]  # Light gray
+                elif "Partial" in sku.id:
+                    # Use same color as original SKU
+                    sku_colors[sku.id] = sku_colors[sku.id.replace("_Partial", "")] if sku.id.replace("_Partial", "") in sku_colors else [random.random() * 0.7 + 0.3 for _ in range(3)]
                 else:
                     # Use bright colors for regular SKUs
                     sku_colors[sku.id] = [random.random() * 0.7 + 0.3 for _ in range(3)]
@@ -89,6 +92,8 @@ def visualize_bundles(bundles: List[Bundle], savePath: str = None) -> None:
 
             label_text = ""
             for sku_id, quantity in skus_same.items():
+                if "Partial" in sku_id:
+                    sku_id = sku_id.replace("_Partial", "\n(Partial)")
                 if label_text:
                     label_text += "\n"
                 if quantity > 1:

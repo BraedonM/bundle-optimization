@@ -374,8 +374,8 @@ class Ui_MainWindow:
             if row['Pcs/Bundle'] is not None and row['Quantity'] is not None:
                 try:
                     # convert Quantity to Pcs/Bundle
-                    whole_qty = floor(row['Quantity'] / row['Pcs/Bundle'])
-                    fraction_remaining = (row['Quantity'] % row['Pcs/Bundle']) / row['Pcs/Bundle']
+                    whole_qty = floor(ceil(abs(row['Quantity'])) / row['Pcs/Bundle'])
+                    fraction_remaining = (ceil(abs(row['Quantity'])) % row['Pcs/Bundle']) / row['Pcs/Bundle']
                     df.loc[index, 'Quantity'] = whole_qty + fraction_remaining
                 except ZeroDivisionError:
                     self.show_alert("Error", f"Pcs/Bundle cannot be zero for SKU {row['InventoryID']}. Please check the input data.", "error")
@@ -414,6 +414,51 @@ class Ui_MainWindow:
                 if newLength is not None:
                     if 3600 <= newLength <= 3700:
                         newLength = 3650
+
+                if type(quantity) is float:
+                    # partial sub-bundle
+                    remainder = quantity - floor(quantity)
+                    if remainder > 0:
+                        weight = row['Weight_kg'] * quantity
+                        width, height = self.shrink_to_square(row['Width_mm'], row['Height_mm'], remainder)
+                        if quantity > 1:
+                            new_invID = f"{invID}_Partial"
+                        else:
+                            new_invID = invID
+                        # create a SKU for the partial sub-bundle
+                        sku = SKU(
+                            id=new_invID,
+                            bundleqty=row['Pcs/Bundle'] * remainder,
+                            width=width,
+                            height=height,
+                            length=newLength,
+                            weight=weight,
+                            desc=row['Description'],
+                            can_be_bottom=row['Can_be_bottom'],
+                            data={
+                                'OrderType': row['OrderType'],
+                                'OrderNbr': row['OrderNbr'],
+                                'UOM': row['UOM'],
+                                'Bdl_Override': row['Bdl_Override'] if pd.notna(row['Bdl_Override']) else None,
+                                'ShipTo': row['ShipTo'],
+                                'AddressLine1': row['AddressLine1'],
+                                'AddressLine2': row['AddressLine2'],
+                                'City': row['City'],
+                                'State': row['State'],
+                                'Country': row['Country'],
+                                'Status': row['Status'],
+                                'OrderDate': row['OrderDate'],
+                                'ProdReleaseDate': row['ProdReleaseDate'],
+                                'SchedShipDate': row['SchedShipDate'],
+                                'TargetArrival': row['TargetArrival'],
+                                'NotBefore': row['NotBefore'],
+                                'ShipVia': row['ShipVia'],
+                                'LastModifiedOn': row['LastModifiedOn']
+                            }
+                        )
+                        skus.append(sku)
+                    quantity = floor(quantity)  # convert to whole number for the rest of the SKUs
+
                 for _ in range(int(abs(ceil(quantity)))):
                     sku = SKU(
                         id=invID,
@@ -448,6 +493,32 @@ class Ui_MainWindow:
                     skus.append(sku)
             order_skus[order] = skus
         return order_skus
+
+    def shrink_to_square(self, w, h, x):
+        """
+        Shrinks the area of a rectangle by a multiplier `x`, changing only one dimension,
+        and keeping the shape as close to a square as possible. Used to optimize partial sub-bundles.
+        """
+        if not (0 < x < 1):
+            self.show_alert("Error", "Shrink multiplier must be between 0 and 1.", "error")
+
+        original_area = w * h
+        new_area = original_area * x
+
+        # Option 1: change width, keep height
+        new_w1 = new_area / h
+        aspect_ratio1 = max(new_w1, h) / min(new_w1, h)
+
+        # Option 2: change height, keep width
+        new_h2 = new_area / w
+        aspect_ratio2 = max(w, new_h2) / min(w, new_h2)
+
+        # Choose the one with closer-to-square aspect ratio
+        if aspect_ratio1 < aspect_ratio2:
+            return (new_w1, h)
+        else:
+            return (w, new_h2)
+
 
     def write_optimized_bundles(self, workbook, order_bundles: dict):
         """
