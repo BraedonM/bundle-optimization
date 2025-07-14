@@ -395,6 +395,8 @@ def _group_skus_by_color(skus: List[SKU]) -> dict:
     color_groups = {}
     for sku in skus:
         color = sku.id.split('.')[-1]
+        if "Partial" in color:
+            color = color.replace("_Partial", "")
         if color not in color_groups:
             color_groups[color] = []
         color_groups[color].append(sku)
