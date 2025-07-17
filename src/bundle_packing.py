@@ -91,7 +91,7 @@ def _try_merge_bundles(bundles: List[Bundle], bundle_width: int, bundle_height: 
     # After merging, add filler material to each bundle
     for bundle in bundles:
         bundle.resize_to_content()
-        _add_filler_material(bundle)
+        # _add_filler_material(bundle)
 
     return bundles
 

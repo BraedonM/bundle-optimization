@@ -376,7 +376,10 @@ class Ui_MainWindow:
                     # convert Quantity to Pcs/Bundle
                     whole_qty = floor(ceil(abs(row['Quantity'])) / row['Pcs/Bundle'])
                     fraction_remaining = (ceil(abs(row['Quantity'])) % row['Pcs/Bundle']) / row['Pcs/Bundle']
-                    df.loc[index, 'Quantity'] = whole_qty + fraction_remaining
+                    if fraction_remaining > 0:
+                        df.loc[index, 'Quantity'] = float(whole_qty) + float(fraction_remaining)
+                    else:
+                        df.loc[index, 'Quantity'] = int(whole_qty)
                 except ZeroDivisionError:
                     self.show_alert("Error", f"Pcs/Bundle cannot be zero for SKU {row['InventoryID']}. Please check the input data.", "error")
                     return pd.DataFrame()
@@ -419,6 +422,8 @@ class Ui_MainWindow:
                     # partial sub-bundle
                     remainder = quantity - floor(quantity)
                     if remainder > 0:
+                        if not row['Weight_kg']:
+                            continue
                         weight = row['Weight_kg'] * quantity
                         width, height = self.shrink_to_square(row['Width_mm'], row['Height_mm'], remainder)
                         if quantity > 1:
