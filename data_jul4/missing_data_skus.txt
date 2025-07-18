@@ -1,0 +1,6 @@
+The following SKUs are missing data and could not be included in the optimization:
+
+Order 1013075:
+- TUP.70600
+- TUP.10500
+

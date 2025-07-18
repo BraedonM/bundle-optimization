@@ -1,7 +1,5 @@
-# bundle_packing.py
 from typing import List, Tuple
 from bundle_classes import SKU, Bundle, FILLER_62, FILLER_44
-import copy
 
 MAX_LENGTH = 3680
 BOTTOM_ROW_LENGTH = 0
@@ -91,7 +89,7 @@ def _try_merge_bundles(bundles: List[Bundle], bundle_width: int, bundle_height: 
     # After merging, add filler material to each bundle
     for bundle in bundles:
         bundle.resize_to_content()
-        # _add_filler_material(bundle)
+        _add_filler_material(bundle)
 
     return bundles
 
@@ -127,7 +125,6 @@ def _pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: i
             remaining_skus.remove(largest_sku)
 
         if bundle.skus:
-            # bundle.add_packaging()
             bundles.append(bundle)
 
     return bundles
@@ -137,8 +134,8 @@ def _pack_single_bundle(skus: List[SKU], bundle: Bundle) -> List[SKU]:
     remaining_skus = skus.copy()
     current_y = 0
     is_vertical_row = True
-    vertical_row_height = 0
-    horizontal_start_y = 0
+    # vertical_row_height = 0
+    # horizontal_start_y = 0
 
     # Set bundle max length based on available SKUs
     bundle.max_length = 3680 if max(sku.length for sku in remaining_skus if sku.length) < 3700 else 7340
@@ -153,7 +150,6 @@ def _pack_single_bundle(skus: List[SKU], bundle: Bundle) -> List[SKU]:
         is_vertical_row = True
         row_height = _place_bottom_row(bundle, bottom_eligible_skus, remaining_skus, is_vertical_row)
         current_y += row_height
-        # if row_height / bundle.height < 0.1:
         is_vertical_row = False
 
     short_skus = [sku for sku in remaining_skus if sku.length <= 609]
@@ -170,19 +166,20 @@ def _pack_single_bundle(skus: List[SKU], bundle: Bundle) -> List[SKU]:
         remaining_skus = fill_row_greedy(bundle, remaining_skus, current_y)
 
         # Update pattern for next row
-        if is_vertical_row:
-            is_vertical_row = False
-            vertical_row_height = row_height
-            horizontal_start_y = current_y
-        else:
-            horizontal_section_height = current_y - horizontal_start_y
-            if horizontal_section_height >= vertical_row_height:
-                is_vertical_row = True
-                vertical_row_height = 0
-                horizontal_start_y = 0
+        # if is_vertical_row:
+        #     is_vertical_row = False
+        #     vertical_row_height = row_height
+        #     horizontal_start_y = current_y
+        # else:
+        #     horizontal_section_height = current_y - horizontal_start_y
+        #     if horizontal_section_height >= vertical_row_height:
+        #         is_vertical_row = True
+        #         vertical_row_height = 0
+        #         horizontal_start_y = 0
     remaining_skus = fill_remaining_greedy(bundle, remaining_skus)
 
-    is_vertical_row = True
+    if current_y == 0:
+        is_vertical_row = True
     if short_skus and current_y < bundle.height:
         while short_skus and current_y < bundle.height:
             # Pack short SKUs in a greedy manner
@@ -194,10 +191,10 @@ def _pack_single_bundle(skus: List[SKU], bundle: Bundle) -> List[SKU]:
             short_skus = fill_row_greedy(bundle, short_skus, current_y)
 
             # Update pattern for next row
-            if is_vertical_row:
-                is_vertical_row = False
-            else:
-                is_vertical_row = True
+            # if is_vertical_row:
+            #     is_vertical_row = False
+            # else:
+            #     is_vertical_row = True
 
         # Fill remaining gaps after initial packing
         short_remaining_skus = fill_remaining_greedy(bundle, short_skus)
@@ -456,7 +453,7 @@ def _can_place_sku_at_position(sku: SKU, x: int, y: int, width: int, height: int
             return False
     return True
 
-def _has_sufficient_support(x: int, y: int, width: int, bundle: Bundle, threshold: float = 0.7, get_value: bool = False) -> bool:
+def _has_sufficient_support(x: int, y: int, width: int, bundle: Bundle, threshold: float = 0.85, get_value: bool = False) -> bool:
     """Check if position has sufficient support from SKUs below"""
     buffer = 10
     support_segments = []
@@ -703,10 +700,6 @@ def fill_row_greedy(bundle: Bundle,
                 break
     return remaining_skus
 
-def _calculate_max_stack_quantity(sku_length: float, max_bundle_length: float) -> int:
-    """Calculate maximum stack quantity based on length"""
-    return int(max_bundle_length // sku_length)
-
 def find_stackable_skus(target_sku: SKU, remaining_skus: List[SKU], unavailable_skus: set, target_index: int, max_length: int) -> List[SKU]:
     """Find SKUs that can be stacked with target SKU based on combined length"""
     stackable = []
@@ -739,10 +732,3 @@ def _skus_compatible_for_stacking(sku1: SKU, sku2: SKU) -> bool:
     # Check if candidate sku is within 13mm of target sku width and height
     return (abs(sku1.width - sku2.width) <= 13 and
             abs(sku1.height - sku2.height) <= 13)
-
-def _skus_identical(sku1: SKU, sku2: SKU) -> bool:
-    """Check if two SKUs are identical for stacking purposes"""
-    return (sku1.id == sku2.id and 
-            sku1.width == sku2.width and 
-            sku1.height == sku2.height and
-            sku1.length == sku2.length)

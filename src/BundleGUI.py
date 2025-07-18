@@ -33,8 +33,8 @@ class Ui_MainWindow:
         self.ui.helpButton.clicked.connect(self.openHelp)
 
         self.data = pd.DataFrame()
-        self.maxWidth = 590
-        self.maxHeight = 590
+        self.maxWidth = 559
+        self.maxHeight = 559
         self.maxLength = 3680
         self.workingDir = None  # to hold the directory of the selected Excel file
         self.missingDataSKUs = []  # to hold SKUs that are missing data in the Excel file
@@ -337,7 +337,7 @@ class Ui_MainWindow:
 
         # check if the required columns are present
         self.headers = ["OrderType", "OrderNbr", "Bdl_Override", "InventoryID", "Quantity", "Pcs/Bundle", "Can_be_bottom",
-                   "Width_mm", "Height_mm", "Length_mm", "Weight_kg", "UOM", "Description",
+                   "Dim_shrink", "Width_mm", "Height_mm", "Length_mm", "Weight_kg", "UOM", "Description",
                    "ShipTo", "AddressLine1", "AddressLine2", "City", "State", "Country", "Status", "OrderDate",
                    "ProdReleaseDate", "SchedShipDate", "TargetArrival", "NotBefore", "ShipVia", "LastModifiedOn"]
         for col in self.headers:
@@ -367,6 +367,7 @@ class Ui_MainWindow:
                 df.loc[df_row_idx, 'Height_mm'] = row['Height (mm)']
                 df.loc[df_row_idx, 'Length_mm'] = row['Length (mm)']
                 df.loc[df_row_idx, 'Weight_kg'] = row['Weight kg/length']
+                df.loc[df_row_idx, 'Dim_shrink'] = row['Partial Dim To Reduce']
                 df.loc[df_row_idx, 'Can_be_bottom'] = can_be_bottom
 
         # iterate through df and convert qty (in pieces) to qty (in bundles)
@@ -425,12 +426,8 @@ class Ui_MainWindow:
                         if not row['Weight_kg']:
                             continue
                         weight = row['Weight_kg'] * quantity
-                        width, height = self.shrink_to_square(row['Width_mm'], row['Height_mm'], remainder)
-                        if quantity > 1:
-                            new_invID = f"{invID}_Partial"
-                        else:
-                            new_invID = invID
-                        # create a SKU for the partial sub-bundle
+                        width, height = self.shrink_to_square(row['Width_mm'], row['Height_mm'], remainder, row['Dim_shrink'])
+                        new_invID = f"{invID}_Partial"
                         sku = SKU(
                             id=new_invID,
                             bundleqty=row['Pcs/Bundle'] * remainder,
@@ -499,7 +496,7 @@ class Ui_MainWindow:
             order_skus[order] = skus
         return order_skus
 
-    def shrink_to_square(self, w, h, x):
+    def shrink_to_square(self, w, h, x, dim_to_shrink):
         """
         Shrinks the area of a rectangle by a multiplier `x`, changing only one dimension,
         and keeping the shape as close to a square as possible. Used to optimize partial sub-bundles.
@@ -510,20 +507,20 @@ class Ui_MainWindow:
         original_area = w * h
         new_area = original_area * x
 
-        # Option 1: change width, keep height
-        new_w1 = new_area / h
-        aspect_ratio1 = max(new_w1, h) / min(new_w1, h)
-
-        # Option 2: change height, keep width
-        new_h2 = new_area / w
-        aspect_ratio2 = max(w, new_h2) / min(w, new_h2)
+        if dim_to_shrink.lower() == 'height':
+            # Option 2: change height, keep width
+            new_h2 = new_area / w
+            return (w, new_h2)
+        else:
+            # Option 1: change width, keep height
+            new_w1 = new_area / h
+            return (new_w1, h)
 
         # Choose the one with closer-to-square aspect ratio
-        if aspect_ratio1 < aspect_ratio2:
-            return (new_w1, h)
-        else:
-            return (w, new_h2)
-
+        # if aspect_ratio1 < aspect_ratio2:
+        #     return (new_w1, h)
+        # else:
+        #     return (w, new_h2)
 
     def write_optimized_bundles(self, workbook, order_bundles: dict):
         """
