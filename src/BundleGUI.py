@@ -154,6 +154,8 @@ class Ui_MainWindow:
         # write the packed bundles to a new sheet in the workbook
         if self.append_data:
             self.workbook = self.appendWorkbook
+        self.ui.progressBar.setValue(90)
+        self.ui.progressLabel.setText("Writing optimized bundles to Excel...")
         self.write_optimized_bundles(self.workbook, order_bundles)
 
         self.ui.progressBar.setValue(100)
@@ -498,8 +500,7 @@ class Ui_MainWindow:
 
     def shrink_to_square(self, w, h, x, dim_to_shrink):
         """
-        Shrinks the area of a rectangle by a multiplier `x`, changing only one dimension,
-        and keeping the shape as close to a square as possible. Used to optimize partial sub-bundles.
+        Shrinks the area of a rectangle by a multiplier `x`, changing only one dimension
         """
         if not (0 < x < 1):
             self.show_alert("Error", "Shrink multiplier must be between 0 and 1.", "error")
@@ -511,16 +512,18 @@ class Ui_MainWindow:
             # Option 2: change height, keep width
             new_h2 = new_area / w
             return (w, new_h2)
-        else:
+        elif dim_to_shrink.lower() == 'width':
             # Option 1: change width, keep height
             new_w1 = new_area / h
             return (new_w1, h)
-
-        # Choose the one with closer-to-square aspect ratio
-        # if aspect_ratio1 < aspect_ratio2:
-        #     return (new_w1, h)
-        # else:
-        #     return (w, new_h2)
+        else:
+            # shrink smaller dim if not specified
+            if w < h:
+                new_w1 = new_area / h
+                return (new_w1, h)
+            else:
+                new_h2 = new_area / w
+                return (w, new_h2)
 
     def write_optimized_bundles(self, workbook, order_bundles: dict):
         """

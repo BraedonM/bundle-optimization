@@ -134,8 +134,6 @@ def _pack_single_bundle(skus: List[SKU], bundle: Bundle) -> List[SKU]:
     remaining_skus = skus.copy()
     current_y = 0
     is_vertical_row = True
-    # vertical_row_height = 0
-    # horizontal_start_y = 0
 
     # Set bundle max length based on available SKUs
     bundle.max_length = 3680 if max(sku.length for sku in remaining_skus if sku.length) < 3700 else 7340
@@ -147,7 +145,6 @@ def _pack_single_bundle(skus: List[SKU], bundle: Bundle) -> List[SKU]:
     ]
     if len(bottom_eligible_skus) > 0:
         # Pack bottom row first if eligible SKUs exist
-        is_vertical_row = True
         row_height = _place_bottom_row(bundle, bottom_eligible_skus, remaining_skus, is_vertical_row)
         current_y += row_height
         is_vertical_row = False
@@ -164,18 +161,9 @@ def _pack_single_bundle(skus: List[SKU], bundle: Bundle) -> List[SKU]:
 
         current_y += row_height
         remaining_skus = fill_row_greedy(bundle, remaining_skus, current_y)
+        if is_vertical_row:
+            is_vertical_row = False
 
-        # Update pattern for next row
-        # if is_vertical_row:
-        #     is_vertical_row = False
-        #     vertical_row_height = row_height
-        #     horizontal_start_y = current_y
-        # else:
-        #     horizontal_section_height = current_y - horizontal_start_y
-        #     if horizontal_section_height >= vertical_row_height:
-        #         is_vertical_row = True
-        #         vertical_row_height = 0
-        #         horizontal_start_y = 0
     remaining_skus = fill_remaining_greedy(bundle, remaining_skus)
 
     if current_y == 0:
@@ -191,10 +179,8 @@ def _pack_single_bundle(skus: List[SKU], bundle: Bundle) -> List[SKU]:
             short_skus = fill_row_greedy(bundle, short_skus, current_y)
 
             # Update pattern for next row
-            # if is_vertical_row:
-            #     is_vertical_row = False
-            # else:
-            #     is_vertical_row = True
+            if is_vertical_row:
+                is_vertical_row = False
 
         # Fill remaining gaps after initial packing
         short_remaining_skus = fill_remaining_greedy(bundle, short_skus)
@@ -213,13 +199,13 @@ def _place_bottom_row(bundle: Bundle, bottom_eligible_skus: List[SKU], remaining
     row_height = 0
     row_skus = []
 
-    for sku in bottom_eligible_skus[:]:
-        # sku.width, sku.height = _get_sku_dimensions(sku, is_vertical_row)
+    for i, sku in enumerate(bottom_eligible_skus[:]):
         if (current_x + sku.width <= bundle.width and
             (row_height == 0 or sku.height <= row_height) and
-            _can_fit_in_bundle(sku, current_x, 0, is_vertical_row, bundle)):
+            _can_fit_in_bundle(sku, current_x, 0, is_vertical_row, bundle)
+            and _sku_within_height_range(sku, row_skus)):
 
-            row_skus.append((sku, current_x, 0, is_vertical_row, 1))
+            row_skus.append((i, sku, current_x, 0, is_vertical_row))
             current_x += sku.width
             row_height = max(row_height, sku.height)
             bottom_eligible_skus.remove(sku)
@@ -227,7 +213,7 @@ def _place_bottom_row(bundle: Bundle, bottom_eligible_skus: List[SKU], remaining
             BOTTOM_ROW_LENGTH = current_x
 
     # Place the row
-    for sku, x, y, rotated, qty in row_skus:
+    for i, sku, x, y, rotated in row_skus:
         bundle.add_sku(sku, x, y, rotated)
 
     return row_height
@@ -243,17 +229,22 @@ def _pack_row(bundle: Bundle, remaining_skus: List[SKU], current_y: int, is_vert
         if sku.id not in [s.id for s in unique_skus]:
             unique_skus.append(sku)
     
-    if len(unique_skus) <= 2 and is_vertical_row and all(max(sku.width, sku.height) > 2 * min(sku.width, sku.height) for sku in unique_skus):
-        is_vertical_row = False  # Force horizontal if only a couple SKUs that are very tall
-        for sku in remaining_skus:
-            sku.width, sku.height = _get_sku_dimensions(sku, is_vertical_row)
+    # if len(unique_skus) <= 2 and is_vertical_row and all(max(sku.width, sku.height) > 2 * min(sku.width, sku.height) for sku in unique_skus):
+    #     is_vertical_row = False  # Force horizontal if only a couple SKUs that are very tall
+    for sku in remaining_skus:
+        sku.width, sku.height = _get_sku_dimensions(sku, is_vertical_row)
+    remaining_skus.sort(key=lambda s: s.height, reverse=True)
 
     for i, sku in enumerate(remaining_skus):
-        if id(sku) in considered_skus:
-            continue
-
         width, height = _get_sku_dimensions(sku, is_vertical_row)
-        if width <= 0 or height <= 0:
+        if (
+            # sku has been placed already
+            id(sku) in considered_skus or
+            # sku doesn't have valid dimensions
+            width <= 0 or height <= 0 or
+            # sku is outside +-25mm height of other SKUs in the row
+            not _sku_within_height_range(sku, row_skus)
+        ):
             continue
 
         if (current_x + width <= bundle.width and
@@ -455,14 +446,15 @@ def _can_place_sku_at_position(sku: SKU, x: int, y: int, width: int, height: int
 
 def _has_sufficient_support(x: int, y: int, width: int, bundle: Bundle, threshold: float = 0.85, get_value: bool = False) -> bool:
     """Check if position has sufficient support from SKUs below"""
-    buffer = 10
+    buffer = 5
     support_segments = []
     # Loop through SKUs to find overlaps
     for sku in bundle.skus:
         # If SKU is too short, skip it
         if sku.length <= 609:
             continue
-        if y - buffer <= sku.y + sku.height <= y:
+        # vertical tolerance of +-5mm for support
+        if y - buffer <= sku.y + sku.height <= y + buffer:
             overlap_start = max(x, sku.x)
             overlap_end = min(x + width, sku.x + sku.width)
             if overlap_end > overlap_start:
@@ -732,3 +724,11 @@ def _skus_compatible_for_stacking(sku1: SKU, sku2: SKU) -> bool:
     # Check if candidate sku is within 13mm of target sku width and height
     return (abs(sku1.width - sku2.width) <= 13 and
             abs(sku1.height - sku2.height) <= 13)
+
+def _sku_within_height_range(sku: SKU, row_skus: List) -> bool:
+    """Check if SKU is within height tolerance of previous SKU"""
+    height_tol = 100 # mm tolerance for height matching
+    if not row_skus:
+        return True
+    last_sku_height = row_skus[-1][1].height
+    return (last_sku_height - height_tol <= sku.height <= last_sku_height + height_tol)
