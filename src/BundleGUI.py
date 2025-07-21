@@ -32,13 +32,7 @@ class Ui_MainWindow:
         self.ui.openExcel.clicked.connect(self.openExcel)
         self.ui.helpButton.clicked.connect(self.openHelp)
 
-        self.data = pd.DataFrame()
-        self.maxWidth = 559
-        self.maxHeight = 559
-        self.maxLength = 3680
         self.workingDir = None  # to hold the directory of the selected Excel file
-        self.missingDataSKUs = []  # to hold SKUs that are missing data in the Excel file
-        self.append_data = False  # to indicate if we are appending data to an existing workbook
 
 ## QT Connection Methods (camelCase)
 
@@ -87,6 +81,12 @@ class Ui_MainWindow:
         """
         Optimize bundles based on the data from the Excel file
         """
+        self.maxWidth = 559
+        self.maxHeight = 559
+        self.maxLength = 3680
+        self.missingDataSKUs = []  # to hold SKUs that are missing data in the Excel file
+        self.append_data = False  # to indicate if we are appending data to an existing workbook
+
         self.ui.progressLabel.setText("Getting data...")
         self.ui.progressBar.setValue(10)
         # Get data from input workbook
@@ -330,12 +330,9 @@ class Ui_MainWindow:
             df.loc[len(df)] = row
         for row in sb_data.iter_rows(min_row=3, values_only=True):
             # check for any empty cells in the row
-            if any(cell is None for cell in [el for el in row][2:]):
+            if any(cell is None for cell in [el for el in row][2:7]):
                 continue
             sb_df.loc[len(sb_df)] = row
-
-        # remove any rows with SKUs that are in the missingDataSKUs list
-        df = df[~df['InventoryID'].isin([sku.id for sku in self.missingDataSKUs])]
 
         # check if the required columns are present
         self.headers = ["OrderType", "OrderNbr", "Bdl_Override", "InventoryID", "Quantity", "Pcs/Bundle", "Can_be_bottom",
@@ -362,6 +359,8 @@ class Ui_MainWindow:
                 except TypeError:
                     # if df_row['InventoryID'] is None, skip this row
                     continue
+            if row['Partial Dim To Reduce'] is None:
+                row['Partial Dim To Reduce'] = ''
             for df_row_idx in df_rows:
                 # update the Pcs/Bundle column with the value from sb_df
                 df.loc[df_row_idx, 'Pcs/Bundle'] = row['Qty/bundle']
@@ -396,9 +395,8 @@ class Ui_MainWindow:
         for order, skus in order_skus.items():
             valid_skus = []
             for sku in skus:
-                if sku.width is None or sku.height is None or sku.length is None or sku.weight is None:
+                if None in (sku.width, sku.height, sku.length, sku.weight):
                     if sku.id not in self.missingDataSKUs:
-                        # self.missingDataSKUs.append(sku.id)  # add to missing data SKUs list
                         self.missingDataSKUs.append(sku)  # add to missing data SKUs list
                 else:
                     valid_skus.append(sku)

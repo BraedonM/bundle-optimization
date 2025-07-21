@@ -133,7 +133,6 @@ def _pack_single_bundle(skus: List[SKU], bundle: Bundle) -> List[SKU]:
     """Pack a single bundle using vertical/horizontal pattern"""
     remaining_skus = skus.copy()
     current_y = 0
-    is_vertical_row = True
 
     # Set bundle max length based on available SKUs
     bundle.max_length = 3680 if max(sku.length for sku in remaining_skus if sku.length) < 3700 else 7340
@@ -145,42 +144,33 @@ def _pack_single_bundle(skus: List[SKU], bundle: Bundle) -> List[SKU]:
     ]
     if len(bottom_eligible_skus) > 0:
         # Pack bottom row first if eligible SKUs exist
-        row_height = _place_bottom_row(bundle, bottom_eligible_skus, remaining_skus, is_vertical_row)
+        row_height = _place_bottom_row(bundle, bottom_eligible_skus, remaining_skus, True)
         current_y += row_height
-        is_vertical_row = False
 
     short_skus = [sku for sku in remaining_skus if sku.length <= 609]
     remaining_skus = [sku for sku in remaining_skus if sku.length > 609]
 
     while remaining_skus and current_y < bundle.height:
         # Pack regular row
-        row_height = _pack_row(bundle, remaining_skus, current_y, is_vertical_row, bundle.max_length)
+        row_height = _pack_row(bundle, remaining_skus, current_y, bool(current_y == 0), bundle.max_length)
 
         if row_height == 0:
             break
 
         current_y += row_height
         remaining_skus = fill_row_greedy(bundle, remaining_skus, current_y)
-        if is_vertical_row:
-            is_vertical_row = False
 
     remaining_skus = fill_remaining_greedy(bundle, remaining_skus)
 
-    if current_y == 0:
-        is_vertical_row = True
     if short_skus and current_y < bundle.height:
         while short_skus and current_y < bundle.height:
             # Pack short SKUs in a greedy manner
-            row_height = _pack_row(bundle, short_skus, current_y, is_vertical_row, bundle.max_length)
+            row_height = _pack_row(bundle, short_skus, current_y, bool(current_y == 0), bundle.max_length)
             if row_height == 0:
                 break
 
             current_y += row_height
             short_skus = fill_row_greedy(bundle, short_skus, current_y)
-
-            # Update pattern for next row
-            if is_vertical_row:
-                is_vertical_row = False
 
         # Fill remaining gaps after initial packing
         short_remaining_skus = fill_remaining_greedy(bundle, short_skus)
@@ -580,8 +570,9 @@ def fill_remaining_greedy(bundle: Bundle, remaining_skus: List[SKU]) -> List[SKU
 
                     if _can_place_sku_at_position(sku, x, y, w, h, bundle):
                         # Check support if not on bottom
-                        if y > 0 and not _has_sufficient_support(x, y, w, bundle) or (
-                            y == 0 and (abs(sku.length - bundle.max_length) > 100 or not sku.can_be_bottom)):
+                        if ((y > 0 and not _has_sufficient_support(x, y, w, bundle)) or (
+                            y == 0 and (abs(sku.length - bundle.max_length) > 100 or not sku.can_be_bottom)) or
+                            (y == 0 and not rotated)):
                             continue
 
                         # Find stackable SKUs
@@ -652,7 +643,11 @@ def fill_row_greedy(bundle: Bundle,
                 if w > bundle.width or h > bundle.height or h > y_limit:
                     continue
                 for x,y in sorted(candidate_points, key=lambda p: (p[1], p[0])):
-                    if x+w > bundle.width or y+h > y_limit or (y == 0 and abs(sku.length - bundle.max_length) > 100):
+                    if (x+w > bundle.width or
+                        y+h > y_limit or
+                        (y == 0 and abs(sku.length - bundle.max_length) > 100) or
+                        (y == 0 and not rot)
+                    ):
                         continue
                     if _can_place_sku_at_position(sku, x, y, w, h, bundle) and \
                         ((y == 0 and sku.can_be_bottom) or _has_sufficient_support(x, y, w, bundle)):
