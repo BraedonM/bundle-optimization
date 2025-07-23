@@ -162,42 +162,8 @@ class Ui_MainWindow:
         self.ui.progressBar.setValue(100)
         self.ui.progressLabel.setText("Packing complete!")
 
-        # if self.missingDataSKUs:
-        #     self.show_alert("Missing Data", "There exist InventoryIDs that are missing data in the Excel file\nand have been excluded from optimization.\n\nPlease check the 'missing_data_skus.txt' file for details.", "warning")
-        #     # write the missing SKUs to a file
-        #     with open(f"{self.workingDir}/missing_data_skus.txt", 'w') as f:
-        #         f.write("The following SKUs are missing data and could not be included in the optimization:\n\n")
-        #         # group by order number
-        #         missing_skus_by_order = {}
-        #         for sku in self.missingDataSKUs:
-        #             order_nbr = sku.data['OrderNbr']
-        #             if order_nbr not in missing_skus_by_order:
-        #                 missing_skus_by_order[order_nbr] = []
-        #             if sku.id not in missing_skus_by_order[order_nbr]:
-        #                 missing_skus_by_order[order_nbr].append(sku.id)
-        #         for order_nbr, skus in missing_skus_by_order.items():
-        #             f.write(f"Order {order_nbr}:\n")
-        #             for sku in skus:
-        #                 f.write(f"- {sku}\n")
-        #             f.write("\n")
-        # if self.removed_skus:
-        #     self.show_alert("Removed SKUs", "There exist InventoryIDs that were removed from the optimization process due to their dimensions.\n\nPlease check the 'removed_skus.txt' file for details.", "warning")
-        #     # group removed SKUs by order number
-        #     removed_skus_by_order = {}
-        #     for sku in self.removed_skus:
-        #         order_nbr = sku.data['OrderNbr']
-        #         if order_nbr not in removed_skus_by_order:
-        #             removed_skus_by_order[order_nbr] = []
-        #         if sku.id not in [sku.id for sku in removed_skus_by_order[order_nbr]]:
-        #             removed_skus_by_order[order_nbr].append(sku)
-        #     # write the removed SKUs to a file
-        #     with open(f"{self.workingDir}/removed_skus.txt", 'w') as f:
-        #         f.write("The following SKUs were removed from the optimization process due to their dimensions:\n\n")
-        #         for order_nbr, skus in removed_skus_by_order.items():
-        #             f.write(f"Order {order_nbr}:\n")
-        #             for sku in skus:
-        #                 f.write(f"- {sku.id} (Width: {sku.width}, Height: {sku.height}, Length: {sku.length}, Weight: {sku.weight})\n")
-        #             f.write("\n")
+        if self.missingDataSKUs:
+            self.show_alert("Missing Data", "There exist InventoryIDs that are missing data in the Excel file\nand have been excluded from optimization.\n\nThey can be found under bundle \'0\' for each order in the optimization file.", "warning")
 
     def openImages(self):
         """
@@ -373,6 +339,7 @@ class Ui_MainWindow:
                 df.loc[df_row_idx, 'Can_be_bottom'] = can_be_bottom
 
         # iterate through df and convert qty (in pieces) to qty (in bundles)
+        df['Quantity'] = df['Quantity'].astype(float)
         for index, row in df.iterrows():
             if row['Pcs/Bundle'] is not None and row['Quantity'] is not None:
                 try:

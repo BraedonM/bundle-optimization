@@ -212,11 +212,31 @@ def _stack_skus_flat(bundle: Bundle, sku_groups: dict = {}) -> None:
     bundles = []
     while sku_groups:
         # sort groups by length, then width of largest SKU in group
-        sorted_groups = sorted(sku_groups.items(), key=lambda item: (max(sku.length for sku in item[1]), max(sku.width for sku in item[1])), reverse=False)
         current_y = 0
         max_width = max(sku.width for sku in bundle.skus)
-        new_bundle = Bundle(max_width, bundle.height, MAX_LENGTH)
+        new_bundle = Bundle(max_width, bundle.height, max(sku.length for sku in bundle.skus))
 
+        single_groups = [group for group in sku_groups if len(group[1]) == 1]
+        stack_eligible_skus = []
+        for group in single_groups:
+            stack_eligible_skus.extend(sku_groups[group])
+        empty_groups = []
+        for i, sku in enumerate(stack_eligible_skus):
+            stackable_skus = _find_stackable_skus(sku, stack_eligible_skus, set(), i, new_bundle.max_length)
+            # select the largest stackable SKU and add it to the group
+            if stackable_skus:
+                largest_stackable = max(stackable_skus, key=lambda s: s.length)
+                for group in sku_groups.values():
+                    if sku in group and id(largest_stackable) not in [id(s) for s in group]:
+                        group.append(largest_stackable)
+                        break
+                for g_idx, group in reversed(sku_groups.items()):
+                    if id(largest_stackable) in [id(s) for s in group] and len(group) == 1:
+                        empty_groups.append(g_idx)
+        for empty_group in empty_groups:
+            del sku_groups[empty_group]
+
+        sorted_groups = sorted(sku_groups.items(), key=lambda item: (max(sku.length for sku in item[1]), max(sku.width for sku in item[1])), reverse=False)
         for x, group in reversed(sorted_groups):
             max_height = max(sku.height for sku in group)
             if current_y + max_height > max_width:
