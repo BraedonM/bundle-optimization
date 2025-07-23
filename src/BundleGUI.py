@@ -145,7 +145,7 @@ class Ui_MainWindow:
                 continue
             self.ui.progressBar.setValue(int(round(20 + 70 * (list(order_skus.keys()).index(order) + 1) / len(order_skus))))
             self.ui.progressLabel.setText(f"Packing order {order}...")
-            bundles, removed_skus = pack_skus(skus, self.maxWidth, self.maxHeight)
+            bundles, self.removed_skus = pack_skus(skus, self.maxWidth, self.maxHeight)
             order_bundles[order] = bundles
 
             visualize_bundles(bundles, f"{images_dir}/Order_{order}.png")
@@ -156,47 +156,48 @@ class Ui_MainWindow:
             self.workbook = self.appendWorkbook
         self.ui.progressBar.setValue(90)
         self.ui.progressLabel.setText("Writing optimized bundles to Excel...")
+        self.missingDataSKUs.extend(self.removed_skus)  # add removed SKUs to missing data SKUs
         self.write_optimized_bundles(self.workbook, order_bundles)
 
         self.ui.progressBar.setValue(100)
         self.ui.progressLabel.setText("Packing complete!")
 
-        if self.missingDataSKUs:
-            self.show_alert("Missing Data", "There exist InventoryIDs that are missing data in the Excel file\nand have been excluded from optimization.\n\nPlease check the 'missing_data_skus.txt' file for details.", "warning")
-            # write the missing SKUs to a file
-            with open(f"{self.workingDir}/missing_data_skus.txt", 'w') as f:
-                f.write("The following SKUs are missing data and could not be included in the optimization:\n\n")
-                # group by order number
-                missing_skus_by_order = {}
-                for sku in self.missingDataSKUs:
-                    order_nbr = sku.data['OrderNbr']
-                    if order_nbr not in missing_skus_by_order:
-                        missing_skus_by_order[order_nbr] = []
-                    if sku.id not in missing_skus_by_order[order_nbr]:
-                        missing_skus_by_order[order_nbr].append(sku.id)
-                for order_nbr, skus in missing_skus_by_order.items():
-                    f.write(f"Order {order_nbr}:\n")
-                    for sku in skus:
-                        f.write(f"- {sku}\n")
-                    f.write("\n")
-        if removed_skus:
-            self.show_alert("Removed SKUs", "There exist InventoryIDs that were removed from the optimization process due to their dimensions.\n\nPlease check the 'removed_skus.txt' file for details.", "warning")
-            # group removed SKUs by order number
-            removed_skus_by_order = {}
-            for sku in removed_skus:
-                order_nbr = sku.data['OrderNbr']
-                if order_nbr not in removed_skus_by_order:
-                    removed_skus_by_order[order_nbr] = []
-                if sku.id not in [sku.id for sku in removed_skus_by_order[order_nbr]]:
-                    removed_skus_by_order[order_nbr].append(sku)
-            # write the removed SKUs to a file
-            with open(f"{self.workingDir}/removed_skus.txt", 'w') as f:
-                f.write("The following SKUs were removed from the optimization process due to their dimensions:\n\n")
-                for order_nbr, skus in removed_skus_by_order.items():
-                    f.write(f"Order {order_nbr}:\n")
-                    for sku in skus:
-                        f.write(f"- {sku.id} (Width: {sku.width}, Height: {sku.height}, Length: {sku.length}, Weight: {sku.weight})\n")
-                    f.write("\n")
+        # if self.missingDataSKUs:
+        #     self.show_alert("Missing Data", "There exist InventoryIDs that are missing data in the Excel file\nand have been excluded from optimization.\n\nPlease check the 'missing_data_skus.txt' file for details.", "warning")
+        #     # write the missing SKUs to a file
+        #     with open(f"{self.workingDir}/missing_data_skus.txt", 'w') as f:
+        #         f.write("The following SKUs are missing data and could not be included in the optimization:\n\n")
+        #         # group by order number
+        #         missing_skus_by_order = {}
+        #         for sku in self.missingDataSKUs:
+        #             order_nbr = sku.data['OrderNbr']
+        #             if order_nbr not in missing_skus_by_order:
+        #                 missing_skus_by_order[order_nbr] = []
+        #             if sku.id not in missing_skus_by_order[order_nbr]:
+        #                 missing_skus_by_order[order_nbr].append(sku.id)
+        #         for order_nbr, skus in missing_skus_by_order.items():
+        #             f.write(f"Order {order_nbr}:\n")
+        #             for sku in skus:
+        #                 f.write(f"- {sku}\n")
+        #             f.write("\n")
+        # if self.removed_skus:
+        #     self.show_alert("Removed SKUs", "There exist InventoryIDs that were removed from the optimization process due to their dimensions.\n\nPlease check the 'removed_skus.txt' file for details.", "warning")
+        #     # group removed SKUs by order number
+        #     removed_skus_by_order = {}
+        #     for sku in self.removed_skus:
+        #         order_nbr = sku.data['OrderNbr']
+        #         if order_nbr not in removed_skus_by_order:
+        #             removed_skus_by_order[order_nbr] = []
+        #         if sku.id not in [sku.id for sku in removed_skus_by_order[order_nbr]]:
+        #             removed_skus_by_order[order_nbr].append(sku)
+        #     # write the removed SKUs to a file
+        #     with open(f"{self.workingDir}/removed_skus.txt", 'w') as f:
+        #         f.write("The following SKUs were removed from the optimization process due to their dimensions:\n\n")
+        #         for order_nbr, skus in removed_skus_by_order.items():
+        #             f.write(f"Order {order_nbr}:\n")
+        #             for sku in skus:
+        #                 f.write(f"- {sku.id} (Width: {sku.width}, Height: {sku.height}, Length: {sku.length}, Weight: {sku.weight})\n")
+        #             f.write("\n")
 
     def openImages(self):
         """
@@ -538,7 +539,7 @@ class Ui_MainWindow:
             optimized_sheet = workbook["Optimized_Bundles"]
 
         # write headers
-        intersect_headers = ['Can_be_bottom']
+        intersect_headers = ['Can_be_bottom', 'Dim_shrink']
         # remove intersect headers from the main headers
         self.headers = [header for header in self.headers if header not in intersect_headers]
         # add headers
@@ -553,6 +554,51 @@ class Ui_MainWindow:
 
         # add data for each order's bundles
         for order, bundles in order_bundles.items():
+            # add missing/removed skus as part of bundle "0"
+            if order in [sku.data['OrderNbr'] for sku in self.missingDataSKUs]:
+                # add a row for each missing SKU
+                written_skus = set()  # to avoid writing the same SKU multiple times
+                for sku in self.missingDataSKUs:
+                    if sku.id in written_skus:
+                        continue
+                    else:
+                        written_skus.add(sku.id)
+                        # count the number of identical SKUs in the order
+                        order_skus = [s for s in self.missingDataSKUs if s.id == sku.id]
+                        quantity = len(order_skus)
+                    if sku.data['OrderNbr'] == order:
+                        optimized_sheet.append([
+                            sku.data['OrderType'],
+                            order,
+                            0,
+                            sku.data['Bdl_Override'],
+                            sku.id,
+                            quantity,
+                            sku.bundleqty if sku.bundleqty else "N/A",  # default to 1 if bundleqty is None
+                            "N/A" if not sku.bundleqty else quantity * sku.bundleqty,
+                            "N/A",
+                            "N/A",
+                            "N/A",
+                            "N/A",
+                            sku.data['UOM'],
+                            sku.desc,
+                            sku.data['ShipTo'],
+                            sku.data['AddressLine1'],
+                            sku.data['AddressLine2'],
+                            sku.data['City'],
+                            sku.data['State'],
+                            sku.data['Country'],
+                            sku.data['Status'],
+                            sku.data['OrderDate'].strftime("%Y-%m-%d") if sku.data['OrderDate'] else None,
+                            sku.data['ProdReleaseDate'].strftime("%Y-%m-%d") if sku.data['ProdReleaseDate'] else None,
+                            sku.data['SchedShipDate'].strftime("%Y-%m-%d") if sku.data['SchedShipDate'] else None,
+                            sku.data['TargetArrival'],
+                            sku.data['NotBefore'],
+                            sku.data['ShipVia'],
+                            sku.data['LastModifiedOn'].strftime("%Y-%m-%d") if sku.data['LastModifiedOn'] else None,
+                            datetime.now().strftime("%Y-%m-%d"),
+                        ])
+
             order_row_count = 0
             for bundle_index, bundle in enumerate(bundles):
                 # get quantity of each SKU in the bundle (including stacked quantities)

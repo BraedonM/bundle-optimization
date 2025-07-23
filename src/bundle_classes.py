@@ -64,12 +64,12 @@ class Bundle:
         """
         if not self.skus:
             return 0, 0, 0
-        
+
         max_x = max(sku.x + sku.width for sku in self.skus)
         max_y = max(sku.y + sku.height for sku in self.skus)
         # max_length = max(sku.length for sku in self.skus)
         max_length = 3680 if (max(sku.length for sku in self.skus if sku.length) < 3700) else 7340
-        
+
         return max_x, max_y, max_length
 
     def get_total_weight(self):
@@ -93,6 +93,11 @@ class Bundle:
         Add the SKUs from packaging material to the bundle
         """
         width, height, actual_length = self.get_actual_dimensions()
+
+        # Check if all SKUs are horizontal (need boards)
+        add_lumber = False
+        if all([sku.rotated is False for sku in self.skus]):
+            add_lumber = True
 
         # Add weights
         if actual_length == 3680:
@@ -123,6 +128,11 @@ class Bundle:
             else: # 19 inches
                 self.add_sku(PACK_PAD_19_3680, 0, 0, False)
 
+            if add_lumber:
+                self.add_sku(PACK_LUMBER_3680, 0, 0, False)
+                if height > 100:
+                    self.add_sku(PACK_LUMBER_3680, 0, 0, False)
+
         else: # 7340mm
             self.add_sku(PACK_ANGLE_7340, 0, 0, False)
             self.add_sku(PACK_1_4_19_DUN_7340, 0, 0, False)
@@ -150,6 +160,11 @@ class Bundle:
                 self.add_sku(PACK_PAD_13_7340, 0, 0, False)
             else: # 19 inches
                 self.add_sku(PACK_PAD_19_7340, 0, 0, False)
+
+            if add_lumber:
+                self.add_sku(PACK_LUMBER_7340, 0, 0, False)
+                if height > 100:
+                    self.add_sku(PACK_LUMBER_7340, 0, 0, False)
         return
 
 ## PREDEFINED SKUs for Filler and Packaging
@@ -221,6 +236,22 @@ PACK_2_3_19_DUN_7340 = SKU(
     length=965.2,
     weight=3.592,
     desc="2\" X 3\" X 19\" DUNNAGE 7340mm"
+)
+
+PACK_LUMBER_3680 = SKU(
+    id="Pack_2x3x19_Dun_Lumber_3680",
+    bundleqty=1,
+    length=3660,
+    weight=2.721,
+    desc="COMMON LUMBER - 1\" X 4\" X 12\" 3680mm"
+)
+
+PACK_LUMBER_7340 = SKU(
+    id="Pack_2x3x19_Dun_Lumber_7340",
+    bundleqty=2,
+    length=7320,
+    weight=5.442,
+    desc="COMMON LUMBER - 1\" X 4\" X 12\" 7340mm"
 )
 
 PACK_PAD_8_3680 = SKU(
