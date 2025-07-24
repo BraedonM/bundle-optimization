@@ -145,8 +145,7 @@ def _pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: i
             bundle = Bundle(temp_width, temp_height, MAX_LENGTH)
             remaining_skus = _pack_single_bundle(skus_copy, bundle)
 
-            if (bundle.height / bundle.width < 0.5 and len(bundle.skus) > 2) or \
-                (not _has_sufficient_ceiling_coverage(bundle) and bundle.width >= bundle.height):
+            if (bundle.height / bundle.width < 0.5 and len(bundle.skus) > 2):
                 temp_width = round(bundle.width - 20)
                 continue
             if (bundle.height > bundle.width and
@@ -299,6 +298,20 @@ def _pack_single_bundle(skus: List[SKU], bundle: Bundle) -> List[SKU]:
 
     remaining_skus = fill_remaining_greedy(bundle, remaining_skus)
 
+    # sort short skus
+    short_skus.sort(key=lambda x: (x.width * x.height), reverse=False)
+    # Add filler and check if any short SKUs can go inside filler
+    # 1st pass, before short SKUs are placed
+    original_width = bundle.width
+    original_height = bundle.height
+    bundle.resize_to_content()
+    _add_filler_material(bundle)
+    for sku in reversed(short_skus):
+        if _place_short_sku_in_filler(bundle, sku, in_bundle=False):
+            short_skus.remove(sku)
+    bundle.width = original_width
+    bundle.height = original_height
+
     if short_skus and current_y < bundle.height:
         while short_skus and current_y < bundle.height:
             # Pack short SKUs in a greedy manner
@@ -315,6 +328,11 @@ def _pack_single_bundle(skus: List[SKU], bundle: Bundle) -> List[SKU]:
 
     # Add filler and shrink bundle to content
     bundle.resize_to_content()
+    _add_filler_material(bundle)
+    # 2nd pass, move any short SKUs into filler if possible
+    for sku in bundle.skus:
+        if sku.length <= 609:
+            _place_short_sku_in_filler(bundle, sku, in_bundle = True)
 
     return remaining_skus
 
@@ -512,6 +530,33 @@ def _add_filler_material(bundle: Bundle) -> None:
                     bundle.add_sku(filler_copy, x, y, rotated)
                 placed_any = True
                 break
+
+def _place_short_sku_in_filler(bundle: Bundle, sku, in_bundle: bool) -> None:
+    """Place short SKUs inside filler material if possible"""
+    if not sku:
+        return
+
+    # Try to place the short SKU in existing filler
+    for filler in bundle.skus:
+        if "Filler" not in filler.id:
+            continue
+
+        # Check if SKU can fit inside this filler
+        for rotated in [False, True]:
+            width, height = _get_sku_dimensions(sku, rotated)
+
+            if (width <= filler.width and height <= filler.height and sku.length <= filler.length):
+                # _can_place_sku_at_position(sku, filler.x, filler.y, sku.width, sku.height, bundle)):
+                sku.width, sku.height = width, height
+                if in_bundle:
+                    # just move sku to filler position
+                    sku.x, sku.y = filler.x, filler.y
+                    sku.rotated = rotated
+                else:
+                    bundle.add_sku(sku, filler.x, filler.y, False)
+                return True
+
+    return False
 
 # Helper functions
 
@@ -753,8 +798,8 @@ def _has_sufficient_ceiling_coverage(bundle: Bundle) -> bool:
     copy_bundle = copy.deepcopy(bundle)
     copy_bundle.resize_to_content()
     _add_filler_material(copy_bundle)
-    buffer = 50
-    required_coverage = 0.7 # % coverage required
+    buffer = 20
+    required_coverage = 0.8 # % coverage required
 
     if not copy_bundle.skus:
         return False

@@ -7,6 +7,7 @@ from tkinter import filedialog
 import os
 from math import ceil, floor
 from datetime import datetime
+import time
 import numpy as np
 
 from bundle_classes import SKU
@@ -141,10 +142,10 @@ class Ui_MainWindow:
         # pack each order's SKUs into bundles
         order_bundles = {}
         for order, skus in order_skus.items():
+            self.ui.progressLabel.setText(f"Packing order {order}...")
             if skus == []:
                 continue
             self.ui.progressBar.setValue(int(round(20 + 70 * (list(order_skus.keys()).index(order) + 1) / len(order_skus))))
-            self.ui.progressLabel.setText(f"Packing order {order}...")
             bundles, self.removed_skus = pack_skus(skus, self.maxWidth, self.maxHeight)
             order_bundles[order] = bundles
 
