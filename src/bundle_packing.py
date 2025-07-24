@@ -141,11 +141,12 @@ def _pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: i
         before_count = len(remaining_skus)
         skus_copy = copy.deepcopy(remaining_skus)
 
-        while True:
+        while True: # Create first iteration
             bundle = Bundle(temp_width, temp_height, MAX_LENGTH)
             remaining_skus = _pack_single_bundle(skus_copy, bundle)
 
-            if bundle.height / bundle.width < 0.5 and len(bundle.skus) > 2:
+            if (bundle.height / bundle.width < 0.5 and len(bundle.skus) > 2) or \
+                (not _has_sufficient_ceiling_coverage(bundle) and bundle.width >= bundle.height):
                 temp_width = round(bundle.width - 20)
                 continue
             if (bundle.height > bundle.width and
@@ -365,7 +366,7 @@ def _pack_row(bundle: Bundle, remaining_skus: List[SKU], current_y: int, is_vert
         sku.width, sku.height = _get_sku_dimensions(sku, is_vertical_row)
     # sort remaining SKUs by how many appear in the list + bundle
     freq = Counter(sku.id for sku in (remaining_skus + bundle.skus))
-    remaining_skus.sort(key=lambda s: (freq[s.id], s.height), reverse=True)
+    remaining_skus.sort(key=lambda s: (freq[s.id], s.width), reverse=True)
 
     for i, sku in enumerate(remaining_skus):
         width, height = _get_sku_dimensions(sku, is_vertical_row)
@@ -606,12 +607,12 @@ def fill_row_greedy(bundle: Bundle,
     using the same greedy corner/stack logic as fill_remaining_greedy,
     but *never* placing anything with y >= y_limit.
     """
-    y_buffer = 0
+    y_buffer = 30
     x_minimum_for_buffer = 0.5
     placed = True
     while placed and remaining_skus:
         placed = False
-        # same candidate‐point generation...
+        # candidate point generation
         candidate_points = set()
         for sku in bundle.skus:
             candidate_points.add((sku.x + sku.width, sku.y))
@@ -752,7 +753,7 @@ def _has_sufficient_ceiling_coverage(bundle: Bundle) -> bool:
     copy_bundle = copy.deepcopy(bundle)
     copy_bundle.resize_to_content()
     _add_filler_material(copy_bundle)
-    buffer = 20
+    buffer = 50
     required_coverage = 0.7 # % coverage required
 
     if not copy_bundle.skus:
@@ -763,7 +764,7 @@ def _has_sufficient_ceiling_coverage(bundle: Bundle) -> bool:
             overlap_start = max(0, sku.x)
             overlap_end = min(copy_bundle.width, sku.x + sku.width)
             if overlap_end > overlap_start:
-                support_segments.extend(range(round(overlap_start), round(overlap_end)))
+                support_segments = list(set(support_segments).union(list(range(round(overlap_start), round(overlap_end)))))
 
     total_coverage = len(support_segments)
     return total_coverage >= copy_bundle.width * required_coverage
