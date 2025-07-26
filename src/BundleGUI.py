@@ -1,5 +1,6 @@
 from PyQt6.QtWidgets import QMessageBox, QWidget, QApplication
 from BundleQtGui import Ui_BundleOptimizer
+from PyQt6 import QtGui
 
 import openpyxl
 import pandas as pd
@@ -10,6 +11,7 @@ from datetime import datetime
 import time
 import numpy as np
 import warnings
+import ctypes
 
 from bundle_classes import SKU
 from bundle_visualize import visualize_bundles
@@ -25,7 +27,16 @@ class Ui_MainWindow:
         self.Widget.show()
 
     def setupUi(self):
+        # Set icon
+        myappid = 'com.aionex.bundleoptimizer'
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+
+        icon_path = os.path.join(os.path.dirname(__file__), 'app_icon_alt.ico')
+        self.Widget.setWindowIcon(QtGui.QIcon(icon_path))
         warnings.simplefilter(action='ignore', category=FutureWarning)
+
+        self.ui.helpButton.setIcon(QtGui.QIcon(os.path.join(os.path.dirname(__file__), 'help_icon.png')))
+
         # Initialize values and connect signals (camelCase, while helper methods are snake_case)
         self.ui.fileBrowse.clicked.connect(self.getInputWorkbook)
         self.ui.appendBrowse.clicked.connect(self.getAppendWorkbook)
@@ -145,8 +156,6 @@ class Ui_MainWindow:
         # pack each order's SKUs into bundles
         order_bundles = {}
         for order, skus in order_skus.items():
-            if order == 1013214:
-                pass
             self.ui.progressLabel.setText(f"Packing order {order}...")
             # pause to update the GUI
             QApplication.processEvents()

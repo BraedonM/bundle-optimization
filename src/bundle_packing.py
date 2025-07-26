@@ -152,17 +152,29 @@ def _pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: i
                 any_sku_not_bottom = False
                 for sku in reversed(bundle.skus):
                     if sku.y != 0:
-                        max_sku = max(bundle.skus, key=lambda s: s.y + s.height, default=None)
-                        temp_height = round(bundle.height - min(max_sku.height - 1, 20))
                         any_sku_not_bottom = True
                         break
-                # try to reduce height
-                # max_height_sku = max(bundle.skus, key=lambda sku: sku.y + sku.height, default=None)
-                # if max_height_sku.y != 0:
                 if any_sku_not_bottom:
+                    # try repacking with both reduced height and reduced width, see which one gets better coverage
+                    # reduce height
+                    max_sku = max(bundle.skus, key=lambda s: s.y + s.height, default=None)
+                    temp_temp_height = round(bundle.height - min(max_sku.height - 1, 20))
+                    bundle_reduced_height = Bundle(temp_width, temp_temp_height, MAX_LENGTH)
+                    _ = _pack_single_bundle(skus_copy, bundle_reduced_height)
+                    height_ceiling_coverage = _has_sufficient_ceiling_coverage(bundle_reduced_height, get_value=True)
+
+                    # reduce width
+                    temp_temp_width = round(bundle.width - 20)
+                    bundle_reduced_width = Bundle(temp_temp_width, temp_height, MAX_LENGTH)
+                    _ = _pack_single_bundle(skus_copy, bundle_reduced_width)
+                    width_ceiling_coverage = _has_sufficient_ceiling_coverage(bundle_reduced_width, get_value=True)
+
+                    # compare
+                    if round(height_ceiling_coverage, 2) > round(width_ceiling_coverage, 2):
+                        temp_height = temp_temp_height
+                    else:
+                        temp_width = temp_temp_width
                     continue
-                # else:
-                #     pass
 
             if (bundle.height > bundle.width and
                 len(bundle.skus) > 1 and
@@ -818,7 +830,7 @@ def _can_place_sku_at_position(sku: SKU, x: int, y: int, width: int, height: int
             return False
     return True
 
-def _has_sufficient_ceiling_coverage(bundle: Bundle) -> bool:
+def _has_sufficient_ceiling_coverage(bundle: Bundle, get_value: bool = False) -> bool:
     """Check if the bundle has sufficient coverage along the top of the bundle"""
     copy_bundle = copy.deepcopy(bundle)
     copy_bundle.resize_to_content()
@@ -837,6 +849,8 @@ def _has_sufficient_ceiling_coverage(bundle: Bundle) -> bool:
                 support_segments = list(set(support_segments).union(list(range(round(overlap_start), round(overlap_end)))))
 
     total_coverage = len(support_segments)
+    if get_value:
+        return total_coverage / (copy_bundle.width)
     return total_coverage >= copy_bundle.width * required_coverage
 
 def _has_sufficient_support(x: int, y: int, width: int, bundle: Bundle, threshold: float = 0.85, get_value: bool = False) -> bool:
