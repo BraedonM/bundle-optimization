@@ -72,8 +72,8 @@
        <widget class="QFrame" name="frame_5">
         <property name="maximumSize">
          <size>
-          <width>50</width>
-          <height>50</height>
+          <width>35</width>
+          <height>35</height>
          </size>
         </property>
         <property name="frameShape">
@@ -128,15 +128,31 @@
         </property>
         <property name="maximumSize">
          <size>
-          <width>50</width>
-          <height>50</height>
+          <width>35</width>
+          <height>35</height>
          </size>
         </property>
+        <property name="cursor">
+         <cursorShape>PointingHandCursor</cursorShape>
+        </property>
         <property name="styleSheet">
-         <string notr="true">background-color: rgb(234, 234, 234); color: rgb(9, 9, 9);</string>
+         <string notr="true"/>
         </property>
         <property name="text">
-         <string>Help</string>
+         <string/>
+        </property>
+        <property name="icon">
+         <iconset>
+          <normaloff>help_icon.png</normaloff>help_icon.png</iconset>
+        </property>
+        <property name="iconSize">
+         <size>
+          <width>22</width>
+          <height>22</height>
+         </size>
+        </property>
+        <property name="flat">
+         <bool>true</bool>
         </property>
        </widget>
       </item>
@@ -207,7 +223,7 @@
             <string notr="true">color: rgb(255, 255, 255);</string>
            </property>
            <property name="text">
-            <string>Excel File Containing &quot;SO_Input&quot; Sheet</string>
+            <string>Excel File Containing &quot;SO-PackExportData&quot; Sheet</string>
            </property>
           </widget>
          </item>

@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QMessageBox, QWidget
+from PyQt6.QtWidgets import QMessageBox, QWidget, QApplication
 from BundleQtGui import Ui_BundleOptimizer
 
 import openpyxl
@@ -9,6 +9,7 @@ from math import ceil, floor
 from datetime import datetime
 import time
 import numpy as np
+import warnings
 
 from bundle_classes import SKU
 from bundle_visualize import visualize_bundles
@@ -24,6 +25,7 @@ class Ui_MainWindow:
         self.Widget.show()
 
     def setupUi(self):
+        warnings.simplefilter(action='ignore', category=FutureWarning)
         # Initialize values and connect signals (camelCase, while helper methods are snake_case)
         self.ui.fileBrowse.clicked.connect(self.getInputWorkbook)
         self.ui.appendBrowse.clicked.connect(self.getAppendWorkbook)
@@ -86,6 +88,7 @@ class Ui_MainWindow:
         self.maxHeight = 559
         self.maxLength = 3680
         self.missingDataSKUs = []  # to hold SKUs that are missing data in the Excel file
+        self.removed_skus = []  # to hold SKUs that were removed during optimization
         self.append_data = False  # to indicate if we are appending data to an existing workbook
 
         self.ui.progressLabel.setText("Getting data...")
@@ -142,7 +145,11 @@ class Ui_MainWindow:
         # pack each order's SKUs into bundles
         order_bundles = {}
         for order, skus in order_skus.items():
+            if order == 1013214:
+                pass
             self.ui.progressLabel.setText(f"Packing order {order}...")
+            # pause to update the GUI
+            QApplication.processEvents()
             if skus == []:
                 continue
             self.ui.progressBar.setValue(int(round(20 + 70 * (list(order_skus.keys()).index(order) + 1) / len(order_skus))))
@@ -157,7 +164,8 @@ class Ui_MainWindow:
             self.workbook = self.appendWorkbook
         self.ui.progressBar.setValue(90)
         self.ui.progressLabel.setText("Writing optimized bundles to Excel...")
-        self.missingDataSKUs.extend(self.removed_skus)  # add removed SKUs to missing data SKUs
+        QApplication.processEvents()
+        # self.missingDataSKUs.extend(self.removed_skus)  # add removed SKUs to missing data SKUs
         self.write_optimized_bundles(self.workbook, order_bundles)
 
         self.ui.progressBar.setValue(100)
@@ -341,16 +349,23 @@ class Ui_MainWindow:
 
         # iterate through df and convert qty (in pieces) to qty (in bundles)
         df['Quantity'] = df['Quantity'].astype(float)
+        seen_skus = {}  # to track seen SKUs in case of multiple entries
         for index, row in df.iterrows():
             if row['Pcs/Bundle'] is not None and row['Quantity'] is not None:
                 try:
                     # convert Quantity to Pcs/Bundle
                     whole_qty = floor(ceil(abs(row['Quantity'])) / row['Pcs/Bundle'])
                     fraction_remaining = (ceil(abs(row['Quantity'])) % row['Pcs/Bundle']) / row['Pcs/Bundle']
-                    if fraction_remaining > 0:
-                        df.loc[index, 'Quantity'] = float(whole_qty) + float(fraction_remaining)
+
+                    if f'{row['OrderNbr']}_{row['InventoryID']}' in seen_skus.keys():
+                        # add new qty to existing SKU data
+                        df.loc[seen_skus[f'{row['OrderNbr']}_{row['InventoryID']}'], 'Quantity'] += (float(whole_qty) + float(fraction_remaining))
+                        df.loc[index, 'Quantity'] = 0  # set current row to 0
                     else:
-                        df.loc[index, 'Quantity'] = int(whole_qty)
+                        # create new SKU entry
+                        seen_skus[f'{row['OrderNbr']}_{row['InventoryID']}'] = index
+                        df.loc[index, 'Quantity'] = float(whole_qty) + float(fraction_remaining)
+
                 except ZeroDivisionError:
                     self.show_alert("Error", f"Pcs/Bundle cannot be zero for SKU {row['InventoryID']}. Please check the input data.", "error")
                     return pd.DataFrame()
@@ -512,6 +527,8 @@ class Ui_MainWindow:
         self.headers = [header for header in self.headers if header not in intersect_headers]
         # add headers
         self.headers.insert(6, 'TotalPcs')
+        self.headers.insert(3, 'ApprovedBy')
+        self.headers.insert(3, 'ReviewedBy')
         self.headers.insert(2, 'BundleNbr')
         self.headers.append('OptimizedOn')
         if not self.append_data:
@@ -521,7 +538,10 @@ class Ui_MainWindow:
         bottom_groups = []
 
         # add data for each order's bundles
-        for order, bundles in order_bundles.items():
+        for orderIdx, order in enumerate(order_bundles.keys()):
+            bundles = order_bundles[order]
+            self.ui.progressBar.setValue(int(round(90 + 5 * ((orderIdx + 1) / len(order_bundles)))))
+            QApplication.processEvents()
             # add missing/removed skus as part of bundle "0"
             if order in [sku.data['OrderNbr'] for sku in self.missingDataSKUs]:
                 # add a row for each missing SKU
@@ -540,6 +560,8 @@ class Ui_MainWindow:
                             order,
                             0,
                             sku.data['Bdl_Override'],
+                            '',  # ReviewedBy
+                            '',  # ApprovedBy
                             sku.id,
                             quantity,
                             sku.bundleqty if sku.bundleqty else "N/A",  # default to 1 if bundleqty is None
@@ -600,14 +622,16 @@ class Ui_MainWindow:
                             order,
                             bundle_index + 1,
                             sku_data['sku'].data['Bdl_Override'],
+                            '',  # ReviewedBy
+                            '',  # ApprovedBy
                             sku_id,
                             sku_data['qty'],
                             sku_data['sku'].bundleqty,
                             sku_data['qty'] * sku_data['sku'].bundleqty,
-                            actual_width,
-                            actual_height,
-                            bundle.max_length,
-                            total_weight,
+                            round(actual_width),
+                            round(actual_height),
+                            round(bundle.max_length),
+                            round(total_weight),
                             sku_data['sku'].data['UOM'],
                             sku_data['sku'].desc,
                             sku_data['sku'].data['ShipTo'],
@@ -636,6 +660,10 @@ class Ui_MainWindow:
             top_groups.append([optimized_sheet.max_row - order_row_count + 2, optimized_sheet.max_row])
             # add a blank row after each order's bundles
             optimized_sheet.append([])
+
+        # update text
+        self.ui.progressLabel.setText("Saving Excel file...")
+        QApplication.processEvents()
 
         # create a table over the data
         if "OptimizedBundlesTable" in optimized_sheet.tables:
@@ -684,9 +712,30 @@ class Ui_MainWindow:
         """
         Show an alert dialog with the given title and message
         """
+        msg_box = QMessageBox(self.Widget)
+        msg_box.setWindowTitle(title)
+        msg_box.setText(message)
+
+        # Set the icon based on type
         if type == "warning":
-            QMessageBox.warning(self.Widget, title, message)
+            msg_box.setIcon(QMessageBox.Icon.Warning)
         elif type == "info":
-            QMessageBox.information(self.Widget, title, message)
+            msg_box.setIcon(QMessageBox.Icon.Information)
         elif type == "error":
-            QMessageBox.critical(self.Widget, title, message)
+            msg_box.setIcon(QMessageBox.Icon.Critical)
+
+        # Set stylesheet
+        msg_box.setStyleSheet("""
+            QMessageBox {
+                color: white;
+            }
+            QLabel {
+                color: white;
+            }
+            QPushButton {
+                background-color: #eaeaea;
+                color: #090909;
+            }
+        """)
+
+        msg_box.exec()

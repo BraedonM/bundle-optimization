@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import random
 from typing import List
+import numpy as np
 
 from bundle_classes import Bundle
 
@@ -28,10 +29,15 @@ def visualize_bundles(bundles: List[Bundle], savePath: str = None) -> None:
         ax.set_xlim(0, actual_width)
         ax.set_ylim(0, actual_height)
         ax.set_aspect('equal')
-        ax.set_xticks([])
-        ax.set_yticks([])
+        # set ticks every 25mm
+        if bundle.height > 400 or bundle.width > 400:
+            ax.set_xticks(np.arange(0, actual_width, 50))
+            ax.set_yticks(np.arange(0, actual_height, 50))
+        else:
+            ax.set_xticks(np.arange(0, actual_width, 25))
+            ax.set_yticks(np.arange(0, actual_height, 25))
         ax.grid(False)
-        
+
         sku_locations = {}
         for sku in bundle.skus:
             loc_key = (sku.x, sku.y)
