@@ -13,7 +13,7 @@ import numpy as np
 import warnings
 import ctypes
 
-from bundle_classes import SKU
+from bundle_classes import SKU, create_packaging_classes
 from bundle_visualize import visualize_bundles
 from bundle_packing import pack_skus
 
@@ -23,8 +23,8 @@ class Ui_MainWindow:
         self.ui = Ui_BundleOptimizer()
         self.ui.setupUi(self.Widget)
 
-        self.setupUi()
         self.Widget.show()
+        self.setupUi()
 
     def setupUi(self):
         # Set icon
@@ -100,16 +100,27 @@ class Ui_MainWindow:
         self.maxLength = 3680
         self.missingDataSKUs = []  # to hold SKUs that are missing data in the Excel file
         self.removed_skus = []  # to hold SKUs that were removed during optimization
+        self.mach1_skus = []  # to hold SKUs that are packed with Mach1
         self.append_data = False  # to indicate if we are appending data to an existing workbook
 
-        self.ui.progressLabel.setText("Getting data...")
+        self.ui.progressLabel.setText("Getting data for new orders...")
         self.ui.progressBar.setValue(10)
         # Get data from input workbook
         try:
             self.workbook = openpyxl.load_workbook(self.ui.excelDir.text())
             data = self.get_data(self.workbook)
         except Exception as e:
-            self.show_alert("Error", "Invalid path for Excel file.", "error")
+            self.show_alert("Error", "Unable to retrieve data from the Excel file. Is it already open?", "error")
+            self.ui.progressBar.setValue(0)
+            self.ui.progressLabel.setText("")
+            return
+
+        # Get packaging and filler data from the packaging_data file
+        try:
+            packaging_data = self.get_packaging_data()
+            create_packaging_classes(packaging_data)
+        except Exception as e:
+            self.show_alert("Error", f"Unable to retrieve data from the packaging data file. Error: {e}", "error")
             self.ui.progressBar.setValue(0)
             self.ui.progressLabel.setText("")
             return
@@ -117,6 +128,9 @@ class Ui_MainWindow:
         # get unique orders
         unique_orders = list(data['OrderNbr'].unique())
 
+        self.ui.progressLabel.setText("Getting data from existing bundles...")
+        self.ui.progressBar.setValue(15)
+        QApplication.processEvents()
         if self.ui.appendDir.text():
             self.appendWorkbook = openpyxl.load_workbook(self.ui.appendDir.text())
             self.append_data = True
@@ -156,13 +170,14 @@ class Ui_MainWindow:
         # pack each order's SKUs into bundles
         order_bundles = {}
         for order, skus in order_skus.items():
-            self.ui.progressLabel.setText(f"Packing order {order}...")
+            self.ui.progressLabel.setText(f"Packing order {str(order).split('.')[0]}...")
             # pause to update the GUI
             QApplication.processEvents()
             if skus == []:
+                order_bundles[order] = []
                 continue
             self.ui.progressBar.setValue(int(round(20 + 70 * (list(order_skus.keys()).index(order) + 1) / len(order_skus))))
-            bundles, self.removed_skus = pack_skus(skus, self.maxWidth, self.maxHeight)
+            bundles, self.removed_skus = pack_skus(skus, self.maxWidth, self.maxHeight, self.mach1_skus)
             order_bundles[order] = bundles
 
             visualize_bundles(bundles, f"{images_dir}/Order_{order}.png")
@@ -239,18 +254,22 @@ class Ui_MainWindow:
 
 ## Helper Methods (snake_case)
 
-    def get_sub_bundle_data_sheet(self):
+    def get_sub_bundle_data_sheets(self):
         """
         Open a dialog to pick an Excel file, return the sheet "Sub-Bundle_Data"
         """
         # load the workbook and read the sheet "Sub-Bundle_Data"
         path = os.path.join(os.path.dirname(__file__), 'Sub-Bundle_Data.xlsx')
         workbook = openpyxl.load_workbook(path)
-        sheet = workbook["Sub-Bundle_Data"]
-        if not sheet:
+        sb_data = workbook["Sub-Bundle_Data"]
+        if not sb_data:
             self.show_alert("Warning", "Sheet 'Sub-Bundle_Data' not found in file.")
             return None
-        return sheet
+        mach1_skus = workbook["MACH1_SKUs"]
+        if not mach1_skus:
+            self.show_alert("Warning", "Sheet 'MACH1_SKUs' not found in file.")
+            return None
+        return sb_data, mach1_skus
 
     def remove_optimized_orders(self, orders, workbook):
         """
@@ -258,33 +277,42 @@ class Ui_MainWindow:
         """
         if "Optimized_Bundles" not in workbook.sheetnames:
             return orders, workbook
+
         optimized_sheet = workbook["Optimized_Bundles"]
         # remove table formatting if it exists
         if "OptimizedBundlesTable" in optimized_sheet.tables:
             del optimized_sheet.tables["OptimizedBundlesTable"]
+
         # find orders that have been updated since last optimization (the 'OptimizedOn' column is earlier than the 'LastModifiedOn' column)
+        orders_to_remove = []
         found_order = False
-        for order in orders:
-            # get the last modified date of the order from the optimized sheet
-            for rowIdx in range(optimized_sheet.max_row, 0, -1):
-                row = optimized_sheet[rowIdx]
-                if row[1].value == order:
-                    last_modified_on = row[-2].value
-                    optimized_on = row[-1].value
-                    # convert to datetime if not None
-                    if last_modified_on and optimized_on:
-                        last_modified_on = datetime.strptime(last_modified_on, "%Y-%m-%d")
-                        optimized_on = datetime.strptime(optimized_on, "%Y-%m-%d")
-                        if last_modified_on <= optimized_on: # modified earlier than it was optimized
-                            orders = [o for o in orders if o != order]  # remove the order from the list
-                        else:
-                            if not found_order:
-                                found_order = True
-                                optimized_sheet.row_dimensions[rowIdx + 1].outlineLevel = 0
-                                optimized_sheet.delete_rows(rowIdx + 1, 1)  # remove blank row that separates orders
-                            optimized_sheet.row_dimensions[rowIdx].outlineLevel = 0
-                            optimized_sheet.delete_rows(rowIdx, 1)  # remove the row from the optimized sheet
-            found_order = False
+        # get the last modified date of the order from the optimized sheet
+        for rowIdx in range(optimized_sheet.max_row, 0, -1):
+            row = optimized_sheet[rowIdx]
+            if not any(cell.value for cell in row):
+                found_order = False
+                continue  # skip empty rows
+            if row[1].value in orders:
+                last_modified_on = row[-2].value
+                optimized_on = row[-1].value
+                # convert to datetime if not None
+                if last_modified_on and optimized_on:
+                    last_modified_on = datetime.strptime(last_modified_on, "%Y-%m-%d")
+                    optimized_on = datetime.strptime(optimized_on, "%Y-%m-%d")
+                    if last_modified_on <= optimized_on and row[1].value not in self.override_orders: # modified earlier than it was optimized
+                        # don't re-optimize this order
+                        orders_to_remove.append(row[1].value)
+                    else:
+                        # remove the order from the file so it can be re-optimized
+                        if not found_order:
+                            found_order = True
+                            optimized_sheet.row_dimensions[rowIdx + 1].outlineLevel = 0
+                            optimized_sheet.delete_rows(rowIdx + 1, 1)  # remove blank row that separates orders
+                        optimized_sheet.row_dimensions[rowIdx].outlineLevel = 0
+                        optimized_sheet.delete_rows(rowIdx, 1)  # remove the row from the optimized sheet
+        # remove the orders that have been optimized
+        orders_to_remove = set(orders_to_remove)  # convert to set for faster lookup
+        orders = [order for order in orders if order not in orders_to_remove]
 
         # save the workbook after removing orders
         try:
@@ -304,7 +332,7 @@ class Ui_MainWindow:
         if not so_input:
             self.show_alert("Warning", "Sheet 'SO-PackExportData' is empty or not found. Using first sheet in the file instead.")
             so_input = workbook.active  # fallback to the first sheet if is not found
-        sb_data = self.get_sub_bundle_data_sheet()
+        sb_data, mach1_skus_data = self.get_sub_bundle_data_sheets()
 
         df = pd.DataFrame(columns=[cell.value for cell in so_input[1]])
         sb_df = pd.DataFrame(columns=[cell.value for cell in sb_data[2]])
@@ -352,16 +380,19 @@ class Ui_MainWindow:
                 df.loc[df_row_idx, 'Width_mm'] = row['Width (mm)']
                 df.loc[df_row_idx, 'Height_mm'] = row['Height (mm)']
                 df.loc[df_row_idx, 'Length_mm'] = row['Length (mm)']
-                df.loc[df_row_idx, 'Weight_kg'] = row['Weight kg/length']
+                df.loc[df_row_idx, 'Weight_kg'] = float(row['Weight kg/bundle'] * df.loc[df_row_idx, 'BaseOrderQty'] / df.loc[df_row_idx, 'Quantity'])
                 df.loc[df_row_idx, 'Dim_shrink'] = row['Partial Dim To Reduce']
                 df.loc[df_row_idx, 'Can_be_bottom'] = can_be_bottom
 
         # iterate through df and convert qty (in pieces) to qty (in bundles)
         df['Quantity'] = df['Quantity'].astype(float)
         seen_skus = {}  # to track seen SKUs in case of multiple entries
+        self.override_orders = []
         for index, row in df.iterrows():
             if row['Pcs/Bundle'] is not None and row['Quantity'] is not None:
                 try:
+                    if row['Bdl_Override'] and row['OrderNbr'] not in self.override_orders:
+                        self.override_orders.append(row['OrderNbr'])
                     # convert Quantity to Pcs/Bundle
                     whole_qty = floor(ceil(abs(row['Quantity'])) / row['Pcs/Bundle'])
                     fraction_remaining = (ceil(abs(row['Quantity'])) % row['Pcs/Bundle']) / row['Pcs/Bundle']
@@ -379,7 +410,38 @@ class Ui_MainWindow:
                     self.show_alert("Error", f"Pcs/Bundle cannot be zero for SKU {row['InventoryID']}. Please check the input data.", "error")
                     return pd.DataFrame()
 
+        # Get MACH1 SKU identifiers
+        for row in mach1_skus_data.iter_rows(min_row=2, values_only=True):
+            sku_id = row[0].strip()
+            self.mach1_skus.append(sku_id)
+
         return df
+
+    def get_packaging_data(self):
+        """
+        Read data from the 'Packaging_Data' file
+        """
+        path = os.path.join(os.path.dirname(__file__), 'Packaging_Data.xlsx')
+        if not os.path.exists(path):
+            raise FileNotFoundError("Packaging_Data.xlsx file not found.")
+        workbook = openpyxl.load_workbook(path, data_only=True)
+        packaging_data = {}
+
+        sheet = workbook['Packaging_Data']
+        if not sheet:
+            raise ValueError("Sheet 'Packaging_Data' is empty or not found.")
+        df = pd.DataFrame(columns=[cell.value for cell in sheet[1]])
+        for row in sheet.iter_rows(min_row=2, values_only=True):
+            if all(cell is None for cell in row):
+                continue
+            df.loc[len(df)] = row
+        packaging_data['Packaging_Data'] = df
+
+        data_dict = {}
+        # Break data into a dictionary
+        for pidIdx, pid in enumerate(df['PID']):
+            data_dict[pid] = df.iloc[pidIdx]
+        return data_dict
 
     def remove_invalids(self, order_skus: dict) -> dict:
         """
@@ -416,9 +478,6 @@ class Ui_MainWindow:
                     # partial sub-bundle
                     remainder = quantity - floor(quantity)
                     if remainder > 0:
-                        if not row['Weight_kg']:
-                            continue
-                        weight = row['Weight_kg'] * quantity
                         width, height = self.shrink_to_square(row['Width_mm'], row['Height_mm'], remainder, row['Dim_shrink'])
                         new_invID = f"{invID}_Partial"
                         sku = SKU(
@@ -427,7 +486,7 @@ class Ui_MainWindow:
                             width=width,
                             height=height,
                             length=newLength,
-                            weight=weight,
+                            weight=row['Weight_kg'] * remainder,
                             desc=row['Description'],
                             can_be_bottom=row['Can_be_bottom'],
                             data={
@@ -573,8 +632,8 @@ class Ui_MainWindow:
                             '',  # ApprovedBy
                             sku.id,
                             quantity,
-                            sku.bundleqty if sku.bundleqty else "N/A",  # default to 1 if bundleqty is None
-                            "N/A" if not sku.bundleqty else quantity * sku.bundleqty,
+                            round(sku.bundleqty) if sku.bundleqty else "N/A",  # default to 1 if bundleqty is None
+                            "N/A" if not sku.bundleqty else round(quantity * sku.bundleqty),
                             "N/A",
                             "N/A",
                             "N/A",
@@ -635,8 +694,8 @@ class Ui_MainWindow:
                             '',  # ApprovedBy
                             sku_id,
                             sku_data['qty'],
-                            sku_data['sku'].bundleqty,
-                            sku_data['qty'] * sku_data['sku'].bundleqty,
+                            round(sku_data['sku'].bundleqty),
+                            round(sku_data['qty'] * sku_data['sku'].bundleqty),
                             round(actual_width),
                             round(actual_height),
                             round(bundle.max_length),

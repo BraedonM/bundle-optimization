@@ -2,6 +2,30 @@
 from dataclasses import dataclass
 from typing import List
 
+# Packaging and filler materials
+PACK_ANGLE_3680 = None
+PACK_ANGLE_7340 = None
+PACK_1_4_19_DUN_3680 = None
+PACK_1_4_19_DUN_7340 = None
+PACK_2_3_19_DUN_3680 = None
+PACK_2_3_19_DUN_7340 = None
+PACK_LUMBER_3680 = None
+PACK_LUMBER_7340 = None
+PACK_PAD_8_3680 = None
+PACK_PAD_8_7340 = None
+PACK_PAD_10_3680 = None
+PACK_PAD_10_7340 = None
+PACK_PAD_13_3680 = None
+PACK_PAD_13_7340 = None
+PACK_PAD_19_3680 = None
+PACK_PAD_19_7340 = None
+PACK_SUB_BNDL_WRP_3680 = None
+PACK_SUB_BNDL_WRP_7340 = None
+PACK_MST_BNDL_WRP_3680 = None
+PACK_MST_BNDL_WRP_7340 = None
+FILLER_44 = None
+FILLER_62 = None
+
 @dataclass
 class SKU:
     id: str
@@ -104,8 +128,8 @@ class Bundle:
             self.add_sku(PACK_ANGLE_3680, 0, 0, False)
             self.add_sku(PACK_1_4_19_DUN_3680, 0, 0, False)
             self.add_sku(PACK_2_3_19_DUN_3680, 0, 0, False)
-            self.add_sku(PACK_SUB_BUNDL_WRP_3680, 0, 0, False)
-            self.add_sku(PACK_MST_BUNDL_WRP_3680, 0, 0, False)
+            self.add_sku(PACK_SUB_BNDL_WRP_3680, 0, 0, False)
+            self.add_sku(PACK_MST_BNDL_WRP_3680, 0, 0, False)
 
             self.max_length = 3680
 
@@ -137,8 +161,8 @@ class Bundle:
             self.add_sku(PACK_ANGLE_7340, 0, 0, False)
             self.add_sku(PACK_1_4_19_DUN_7340, 0, 0, False)
             self.add_sku(PACK_2_3_19_DUN_7340, 0, 0, False)
-            self.add_sku(PACK_SUB_BUNDL_WRP_7340, 0, 0, False)
-            self.add_sku(PACK_MST_BUNDL_WRP_7340, 0, 0, False)
+            self.add_sku(PACK_SUB_BNDL_WRP_7340, 0, 0, False)
+            self.add_sku(PACK_MST_BNDL_WRP_7340, 0, 0, False)
 
             self.max_length = 7340
 
@@ -167,185 +191,248 @@ class Bundle:
                     self.add_sku(PACK_LUMBER_7340, 0, 0, False)
         return
 
-## PREDEFINED SKUs for Filler and Packaging
-# Filler materials
-FILLER_44 = SKU(
-    id="Pack_44Filler",
-    bundleqty=1,
-    width=100,
-    height=100,
-    length=3660,
-    weight=1.810,
-    desc="Pack 44 Filler Material"
-)
+def create_packaging_classes(data: List[dict]) -> List[SKU]:
+    """
+    Create SKU classes for packaging and filler materials from the provided data.
+    """
+    global PACK_ANGLE_3680, PACK_ANGLE_7340, PACK_1_4_19_DUN_3680, PACK_1_4_19_DUN_7340
+    global PACK_2_3_19_DUN_3680, PACK_2_3_19_DUN_7340, PACK_LUMBER_3680, PACK_LUMBER_7340
+    global PACK_PAD_8_3680, PACK_PAD_8_7340, PACK_PAD_10_3680, PACK_PAD_10_7340
+    global PACK_PAD_13_3680, PACK_PAD_13_7340, PACK_PAD_19_3680, PACK_PAD_19_7340
+    global PACK_SUB_BNDL_WRP_3680, PACK_SUB_BNDL_WRP_7340
+    global PACK_MST_BNDL_WRP_3680, PACK_MST_BNDL_WRP_7340
+    global FILLER_44, FILLER_62
 
-FILLER_62 = SKU(
-    id="Pack_62Filler",
-    bundleqty=1,
-    width=150,
-    height=50,
-    length=3660,
-    weight=2.268,
-    desc="Pack 62 Filler Material"
-)
+    # Pack_Angle
+    pack_angle = data['Pack_Angle']
+    PACK_ANGLE_3680 = SKU(
+        id='Pack_Angle_3680',
+        bundleqty=pack_angle['3680mm Qty'],
+        # width=pack_angle['Width (mm)'],
+        # height=pack_angle['Height (mm)'],
+        length=pack_angle['3680mm Length (mm)'],
+        weight=pack_angle['3680mm Weight (kg)'],
+        desc=pack_angle['Description'],
+    )
 
-# Packaging SKUs
-PACK_ANGLE_3680 = SKU(
-    id="Pack_Angle",
-    bundleqty=4,
-    length=3660,
-    weight=5.442,
-    desc="PRINTED ANGLEBOARD 3680mm"
-)
+    PACK_ANGLE_7340 = SKU(
+        id='Pack_Angle_7340',
+        bundleqty=pack_angle['7340mm Qty'],
+        # width=pack_angle['Width (mm)'],
+        # height=pack_angle['Height (mm)'],
+        length=pack_angle['7340mm Length (mm)'],
+        weight=pack_angle['7340mm Weight (kg)'],
+        desc=pack_angle['Description'],
+    )
 
-PACK_ANGLE_7340 = SKU(
-    id="Pack_Angle",
-    bundleqty=8,
-    length=7320,
-    weight=10.884,
-    desc="PRINTED ANGLEBOARD 7340mm"
-)
+    # Pack_1x4x19_Dun
+    pack_1x4x19_dun = data['Pack_1x4x19_Dun']
+    PACK_1_4_19_DUN_3680 = SKU(
+        id='Pack_1x4x19_Dun_3680',
+        bundleqty=pack_1x4x19_dun['3680mm Qty'],
+        # width=pack_1x4x19_dun['Width (mm)'],
+        # height=pack_1x4x19_dun['Height (mm)'],
+        length=pack_1x4x19_dun['3680mm Length (mm)'],
+        weight=pack_1x4x19_dun['3680mm Weight (kg)'],
+        desc=pack_1x4x19_dun['Description'],
+    )
 
-PACK_1_4_19_DUN_3680 = SKU(
-    id="Pack_1x4x19_Dun",
-    bundleqty=2,
-    length=482.6,
-    weight=0.998,
-    desc="1\" X 4\" X 19\" DUNNAGE 3680mm"
-)
+    PACK_1_4_19_DUN_7340 = SKU(
+        id='Pack_1x4x19_Dun_7340',
+        bundleqty=pack_1x4x19_dun['7340mm Qty'],
+        # width=pack_1x4x19_dun['Width (mm)'],
+        # height=pack_1x4x19_dun['Height (mm)'],
+        length=pack_1x4x19_dun['7340mm Length (mm)'],
+        weight=pack_1x4x19_dun['7340mm Weight (kg)'],
+        desc=pack_1x4x19_dun['Description'],
+    )
 
-PACK_1_4_19_DUN_7340 = SKU(
-    id="Pack_1x4x19_Dun",
-    bundleqty=4,
-    length=965.2,
-    weight=1.995,
-    desc="1\" X 4\" X 19\" DUNNAGE 7340mm"
-)
+    # Pack_2x3x19_Dun
+    pack_2x3x19_dun = data['Pack_2x3x19_Dun']
+    PACK_2_3_19_DUN_3680 = SKU(
+        id='Pack_2x3x19_Dun_3680',
+        bundleqty=pack_2x3x19_dun['3680mm Qty'],
+        # width=pack_2x3x19_dun['Width (mm)'],
+        # height=pack_2x3x19_dun['Height (mm)'],
+        length=pack_2x3x19_dun['3680mm Length (mm)'],
+        weight=pack_2x3x19_dun['3680mm Weight (kg)'],
+        desc=pack_2x3x19_dun['Description'],
+    )
+    PACK_2_3_19_DUN_7340 = SKU(
+        id='Pack_2x3x19_Dun_7340',
+        bundleqty=pack_2x3x19_dun['7340mm Qty'],
+        # width=pack_2x3x19_dun['Width (mm)'],
+        # height=pack_2x3x19_dun['Height (mm)'],
+        length=pack_2x3x19_dun['7340mm Length (mm)'],
+        weight=pack_2x3x19_dun['7340mm Weight (kg)'],
+        desc=pack_2x3x19_dun['Description'],
+    )
 
-PACK_2_3_19_DUN_3680 = SKU(
-    id="Pack_2x3x19_Dun",
-    bundleqty=2,
-    length=482.6,
-    weight=1.796,
-    desc="2\" X 3\" X 19\" DUNNAGE 3680mm"
-)
+    # Pack_Lumber
+    pack_lumber = data['Pack_Lumber']
+    PACK_LUMBER_3680 = SKU(
+        id='Pack_Lumber_3680',
+        bundleqty=pack_lumber['3680mm Qty'],
+        # width=pack_lumber['Width (mm)'],
+        # height=pack_lumber['Height (mm)'],
+        length=pack_lumber['3680mm Length (mm)'],
+        weight=pack_lumber['3680mm Weight (kg)'],
+        desc=pack_lumber['Description'],
+    )
+    PACK_LUMBER_7340 = SKU(
+        id='Pack_Lumber_7340',
+        bundleqty=pack_lumber['7340mm Qty'],
+        # width=pack_lumber['Width (mm)'],
+        # height=pack_lumber['Height (mm)'],
+        length=pack_lumber['7340mm Length (mm)'],
+        weight=pack_lumber['7340mm Weight (kg)'],
+        desc=pack_lumber['Description'],
+    )
 
-PACK_2_3_19_DUN_7340 = SKU(
-    id="Pack_2x3x19_Dun",
-    bundleqty=4,
-    length=965.2,
-    weight=3.592,
-    desc="2\" X 3\" X 19\" DUNNAGE 7340mm"
-)
+    # Pack_Pad_8
+    pack_pad_8 = data['Pack_Pad_8']
+    PACK_PAD_8_3680 = SKU(
+        id='Pack_Pad_8_3680',
+        bundleqty=pack_pad_8['3680mm Qty'],
+        # width=pack_pad_8['Width (mm)'],
+        # height=pack_pad_8['Height (mm)'],
+        length=pack_pad_8['3680mm Length (mm)'],
+        weight=pack_pad_8['3680mm Weight (kg)'],
+        desc=pack_pad_8['Description'],
+    )
+    PACK_PAD_8_7340 = SKU(
+        id='Pack_Pad_8_7340',
+        bundleqty=pack_pad_8['7340mm Qty'],
+        # width=pack_pad_8['Width (mm)'],
+        # height=pack_pad_8['Height (mm)'],
+        length=pack_pad_8['7340mm Length (mm)'],
+        weight=pack_pad_8['7340mm Weight (kg)'],
+        desc=pack_pad_8['Description'],
+    )
 
-PACK_LUMBER_3680 = SKU(
-    id="Pack_2x3x19_Dun_Lumber_3680",
-    bundleqty=1,
-    length=3660,
-    weight=2.721,
-    desc="COMMON LUMBER - 1\" X 4\" X 12\" 3680mm"
-)
+    # Pack_Pad_10
+    pack_pad_10 = data['Pack_Pad_10']
+    PACK_PAD_10_3680 = SKU(
+        id='Pack_Pad_10_3680',
+        bundleqty=pack_pad_10['3680mm Qty'],
+        # width=pack_pad_10['Width (mm)'],
+        # height=pack_pad_10['Height (mm)'],
+        length=pack_pad_10['3680mm Length (mm)'],
+        weight=pack_pad_10['3680mm Weight (kg)'],
+        desc=pack_pad_10['Description'],
+    )
+    PACK_PAD_10_7340 = SKU(
+        id='Pack_Pad_10_7340',
+        bundleqty=pack_pad_10['7340mm Qty'],
+        # width=pack_pad_10['Width (mm)'],
+        # height=pack_pad_10['Height (mm)'],
+        length=pack_pad_10['7340mm Length (mm)'],
+        weight=pack_pad_10['7340mm Weight (kg)'],
+        desc=pack_pad_10['Description'],
+    )
 
-PACK_LUMBER_7340 = SKU(
-    id="Pack_2x3x19_Dun_Lumber_7340",
-    bundleqty=2,
-    length=7320,
-    weight=5.442,
-    desc="COMMON LUMBER - 1\" X 4\" X 12\" 7340mm"
-)
+    # Pack_Pad_13
+    pack_pad_13 = data['Pack_Pad_13']
+    PACK_PAD_13_3680 = SKU(
+        id='Pack_Pad_13_3680',
+        bundleqty=pack_pad_13['3680mm Qty'],
+        # width=pack_pad_13['Width (mm)'],
+        # height=pack_pad_13['Height (mm)'],
+        length=pack_pad_13['3680mm Length (mm)'],
+        weight=pack_pad_13['3680mm Weight (kg)'],
+        desc=pack_pad_13['Description'],
+    )
+    PACK_PAD_13_7340 = SKU(
+        id='Pack_Pad_13_7340',
+        bundleqty=pack_pad_13['7340mm Qty'],
+        # width=pack_pad_13['Width (mm)'],
+        # height=pack_pad_13['Height (mm)'],
+        length=pack_pad_13['7340mm Length (mm)'],
+        weight=pack_pad_13['7340mm Weight (kg)'],
+        desc=pack_pad_13['Description'],
+    )
 
-PACK_PAD_8_3680 = SKU(
-    id="Pack_Pad_8_3600",
-    bundleqty=2,
-    length=3660,
-    weight=0.898,
-    desc="PAD - 8-1/2\" X 144\" DW ECT #3 WHITE 3680mm"
-)
+    # Pack_Pad_19
+    pack_pad_19 = data['Pack_Pad_19']
+    PACK_PAD_19_3680 = SKU(
+        id='Pack_Pad_19_3680',
+        bundleqty=pack_pad_19['3680mm Qty'],
+        # width=pack_pad_19['Width (mm)'],
+        # height=pack_pad_19['Height (mm)'],
+        length=pack_pad_19['3680mm Length (mm)'],
+        weight=pack_pad_19['3680mm Weight (kg)'],
+        desc=pack_pad_19['Description'],
+    )
+    PACK_PAD_19_7340 = SKU(
+        id='Pack_Pad_19_7340',
+        bundleqty=pack_pad_19['7340mm Qty'],
+        # width=pack_pad_19['Width (mm)'],
+        # height=pack_pad_19['Height (mm)'],
+        length=pack_pad_19['7340mm Length (mm)'],
+        weight=pack_pad_19['7340mm Weight (kg)'],
+        desc=pack_pad_19['Description'],
+    )
 
-PACK_PAD_8_7340 = SKU(
-    id="Pack_Pad_8_7340",
-    bundleqty=4,
-    length=7320,
-    weight=1.796,
-    desc="PAD - 8-1/2\" X 144\" DW ECT #3 WHITE 7340mm"
-)
+    # Pack_Sub_Bndl_Wrp
+    pack_sub_bndl_wrp = data['Pack_Sub_Bndl_Wrp']
+    PACK_SUB_BNDL_WRP_3680 = SKU(
+        id='Pack_Sub_Bndl_Wrp_3680',
+        bundleqty=pack_sub_bndl_wrp['3680mm Qty'],
+        # width=pack_sub_bndl_wrp['Width (mm)'],
+        # height=pack_sub_bndl_wrp['Height (mm)'],
+        length=pack_sub_bndl_wrp['3680mm Length (mm)'],
+        weight=pack_sub_bndl_wrp['3680mm Weight (kg)'],
+        desc=pack_sub_bndl_wrp['Description'],
+    )
+    PACK_SUB_BNDL_WRP_7340 = SKU(
+        id='Pack_Sub_Bndl_Wrp_7340',
+        bundleqty=pack_sub_bndl_wrp['7340mm Qty'],
+        # width=pack_sub_bndl_wrp['Width (mm)'],
+        # height=pack_sub_bndl_wrp['Height (mm)'],
+        length=pack_sub_bndl_wrp['7340mm Length (mm)'],
+        weight=pack_sub_bndl_wrp['7340mm Weight (kg)'],
+        desc=pack_sub_bndl_wrp['Description'],
+    )
 
-PACK_PAD_10_3680 = SKU(
-    id="Pack_Pad_10_3680",
-    bundleqty=2,
-    length=3660,
-    weight=1.995,
-    desc="PAD - 10\" X 144\" DW ECT #3 WHITE 3680mm"
-)
+    # Pack_Mst_Bndl_Wrp
+    pack_mst_bndl_wrp = data['Pack_Mst_Bndl_Wrp']
+    PACK_MST_BNDL_WRP_3680 = SKU(
+        id='Pack_Mst_Bndl_Wrp_3680',
+        bundleqty=pack_mst_bndl_wrp['3680mm Qty'],
+        # width=pack_mst_bndl_wrp['Width (mm)'],
+        # height=pack_mst_bndl_wrp['Height (mm)'],
+        length=pack_mst_bndl_wrp['3680mm Length (mm)'],
+        weight=pack_mst_bndl_wrp['3680mm Weight (kg)'],
+        desc=pack_mst_bndl_wrp['Description'],
+    )
+    PACK_MST_BNDL_WRP_7340 = SKU(
+        id='Pack_Mst_Bndl_Wrp_7340',
+        bundleqty=pack_mst_bndl_wrp['7340mm Qty'],
+        # width=pack_mst_bndl_wrp['Width (mm)'],
+        # height=pack_mst_bndl_wrp['Height (mm)'],
+        length=pack_mst_bndl_wrp['7340mm Length (mm)'],
+        weight=pack_mst_bndl_wrp['7340mm Weight (kg)'],
+        desc=pack_mst_bndl_wrp['Description'],
+    )
 
-PACK_PAD_10_7340 = SKU(
-    id="Pack_Pad_10_7340",
-    bundleqty=4,
-    length=7320,
-    weight=3.991,
-    desc="PAD - 10\" X 144\" DW ECT #3 WHITE 7340mm"
-)
-
-PACK_PAD_13_3680 = SKU(
-    id="Pack_Pad_13_3680",
-    bundleqty=2,
-    length=3660,
-    weight=1.995,
-    desc="PAD - 13\" X 144\" DW ECT #3 WHITE 3680mm"
-)
-
-PACK_PAD_13_7340 = SKU(
-    id="Pack_Pad_13_7340",
-    bundleqty=4,
-    length=7320,
-    weight=3.991,
-    desc="PAD - 13\" X 144\" DW ECT #3 WHITE 7340mm"
-)
-
-PACK_PAD_19_3680 = SKU(
-    id="Pack_Pad_19_3680",
-    bundleqty=2,
-    length=3660,
-    weight=2.721,
-    desc="PAD - 19\" X 144\" DW ECT #3 WHITE 3680mm"
-)
-
-PACK_PAD_19_7340 = SKU(
-    id="Pack_Pad_19_7340",
-    bundleqty=4,
-    length=7320,
-    weight=5.442,
-    desc="PAD - 19\" X 144\" DW ECT #3 WHITE 7340mm"
-)
-
-PACK_SUB_BUNDL_WRP_3680 = SKU(
-    id="Pack_Sub_Bundl_Wrp_3680",
-    bundleqty=2,
-    length=3660,
-    weight=2.268,
-    desc="Sub-Bundle Wrap - Crepe Paper/Stretch Film 3680mm"
-)
-
-PACK_SUB_BUNDL_WRP_7340 = SKU(
-    id="Pack_Sub_Bundl_Wrp_7340",
-    bundleqty=4,
-    length=7320,
-    weight=4.535,
-    desc="Sub-Bundle Wrap - Crepe Paper/Stretch Film 7340mm"
-)
-
-PACK_MST_BUNDL_WRP_3680 = SKU(
-    id="Pack_Mst_Bundl_Wrp_3680",
-    bundleqty=2,
-    length=3660,
-    weight=0.500,
-    desc="Master Bundle - Stretch Wrap 3680mm"
-)
-
-PACK_MST_BUNDL_WRP_7340 = SKU(
-    id="Pack_Mst_Bundl_Wrp_7340",
-    bundleqty=4,
-    length=7320,
-    weight=1.000,
-    desc="Master Bundle - Stretch Wrap 7340mm"
-)
+    # Filler materials
+    filler_44 = data['Pack_44Filler']
+    FILLER_44 = SKU(
+        id='Pack_44Filler',
+        bundleqty=filler_44['3680mm Qty'],
+        width=filler_44['Width (mm)'],
+        height=filler_44['Height (mm)'],
+        length=filler_44['3680mm Length (mm)'],
+        weight=filler_44['3680mm Weight (kg)'],
+        desc=filler_44['Description'],
+    )
+    filler_62 = data['Pack_62Filler']
+    FILLER_62 = SKU(
+        id='Pack_62Filler',
+        bundleqty=filler_62['3680mm Qty'],
+        width=filler_62['Width (mm)'],
+        height=filler_62['Height (mm)'],
+        length=filler_62['3680mm Length (mm)'],
+        weight=filler_62['3680mm Weight (kg)'],
+        desc=filler_62['Description'],
+    )
