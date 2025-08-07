@@ -49,12 +49,14 @@ class Bundle:
     width: float
     height: float
     max_length: float = 3680  # Maximum length for the bundle
+    packing_machine: str = 'MACH5'  # Packing machine used for this bundle
     skus: List[PlacedSKU] = None
 
-    def __init__(self, width: float, height: float, max_length: float = 3680):
+    def __init__(self, width: float, height: float, max_length: float = 3680, packing_machine: str = 'MACH5'):
         self.width = width
         self.height = height
         self.max_length = max_length
+        self.packing_machine = packing_machine
         self.skus = []
 
     def add_sku(self, sku: SKU, x: int, y: int, rotated: bool) -> PlacedSKU:

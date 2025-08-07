@@ -8,6 +8,12 @@ MAX_WEIGHT = 1000 # kg
 BOTTOM_ROW_LENGTH = 0
 REMOVED_SKUS = []
 
+MIN_CEILING_COVERAGE = 0.8  # Minimum ceiling coverage required (%)
+MAX_DIST_FROM_CEILING = 30  # mm, maximum distance from ceiling to be considered sufficient coverage
+STACKING_MAX_DIFF = 13  # mm, maximum difference in width and height for lengthwise stacking SKUs
+SKU_MAX_HEIGHT_DIFF = 50  # mm, maximum height difference for SKUs to be considered compatible in a row
+BASE_COVERAGE_THRESHOLD = 0.8 # Base coverage threshold for support checks (%)
+
 def pack_skus(skus: List[SKU], bundle_width: int, bundle_height: int, mach1_skus: List[str]) -> List[Bundle]:
     """Main entry point for packing SKUs into bundles"""
     global FILLER_62, FILLER_44
@@ -31,15 +37,16 @@ def pack_skus(skus: List[SKU], bundle_width: int, bundle_height: int, mach1_skus
         color, color_skus = remaining_color_groups.pop(0)
         color_skus.sort(key=lambda x: max(x.width, x.height), reverse=True)
 
-        base_bundles = _pack_skus_with_pattern(color_skus, bundle_width, bundle_height)
         if color[-3:] in mach1_skus:
+            base_bundles = _pack_skus_with_pattern(color_skus, bundle_width, bundle_height, machine='MACH1')
             can_try_merge_bundles_mach1.extend(base_bundles)
         else:
+            base_bundles = _pack_skus_with_pattern(color_skus, bundle_width, bundle_height, machine='MACH5')
             can_try_merge_bundles_mach5.extend(base_bundles)
 
     # try to merge bundles if they can all fit in one
-    merged_bundles_mach1 = _try_merge_bundles(can_try_merge_bundles_mach1, bundle_width, bundle_height)
-    merged_bundles_mach5 = _try_merge_bundles(can_try_merge_bundles_mach5, bundle_width, bundle_height)
+    merged_bundles_mach1 = _try_merge_bundles(can_try_merge_bundles_mach1, bundle_width, bundle_height, machine='MACH1')
+    merged_bundles_mach5 = _try_merge_bundles(can_try_merge_bundles_mach5, bundle_width, bundle_height, machine='MACH5')
     final_bundles.extend(merged_bundles_mach1)
     final_bundles.extend(merged_bundles_mach5)
 
@@ -52,7 +59,7 @@ def pack_skus(skus: List[SKU], bundle_width: int, bundle_height: int, mach1_skus
 
     return override_bundles + final_bundles, REMOVED_SKUS
 
-def _try_merge_bundles(bundles: List[Bundle], bundle_width: int, bundle_height: int) -> List[Bundle]:
+def _try_merge_bundles(bundles: List[Bundle], bundle_width: int, bundle_height: int, machine: str) -> List[Bundle]:
     """Attempt to merge bundles if they can all fit in one bundle"""
     best_bundles = []
     mid_bundles = []
@@ -85,12 +92,13 @@ def _try_merge_bundles(bundles: List[Bundle], bundle_width: int, bundle_height: 
                 all_skus = [sku for sku in all_skus if "Filler" not in sku.id]
 
                 # preliminary check if they can fit into one bundle
-                max_length = 3680 if (max(sku.length for sku in all_skus if sku.length) < 3700) else 7340
-                total_volume = sum(sku.width * sku.height * sku.length for sku in all_skus)
-                if total_volume > bundle_width * bundle_height * max_length:
+                bundle1_area = bundle1.width * bundle1.height
+                bundle2_area = bundle2.width * bundle2.height
+                if (bundle1_area + bundle2_area > bundle_width * bundle_height
+                    or (bundle1.get_total_weight() + bundle2.get_total_weight() > MAX_WEIGHT)):
                     continue
                 # try to pack them into a new bundle
-                merged_bundles = _pack_skus_with_pattern(all_skus, bundle_width, bundle_height, merging=True)
+                merged_bundles = _pack_skus_with_pattern(all_skus, bundle_width, bundle_height, merging=True, machine=machine)
                 if len(merged_bundles) == 1:
                     # if they fit into one bundle, remove the original bundles
                     bundles.pop(j)
@@ -119,7 +127,7 @@ def _try_merge_bundles(bundles: List[Bundle], bundle_width: int, bundle_height: 
         bundles.append(flat_count[0])
         sku_groups = {}
 
-    flat_bundle = Bundle(bundle_width, bundle_height, MAX_LENGTH)
+    flat_bundle = Bundle(bundle_width, bundle_height, MAX_LENGTH, packing_machine=machine)
     if sku_groups:
         for group_key, group_skus in sku_groups.items():
             flat_bundle.skus.extend(group_skus)
@@ -127,7 +135,7 @@ def _try_merge_bundles(bundles: List[Bundle], bundle_width: int, bundle_height: 
 
     return bundles
 
-def _pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: int, merging: bool = False) -> List[Bundle]:
+def _pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: int, merging: bool = False, machine: str = 'MACH5') -> List[Bundle]:
     """Pack SKUs into bundles using pattern-based algorithm"""
     global REMOVED_SKUS
     if not skus:
@@ -155,7 +163,7 @@ def _pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: i
         skus_copy = copy.deepcopy(remaining_skus)
 
         while True: # Create first iteration
-            bundle = Bundle(temp_width, temp_height, MAX_LENGTH)
+            bundle = Bundle(temp_width, temp_height, MAX_LENGTH, machine)
             remaining_skus = _pack_single_bundle(skus_copy, bundle)
 
             if (bundle.height / bundle.width < 0.5 and len(bundle.skus) > 2):
@@ -171,19 +179,20 @@ def _pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: i
                     # try repacking with both reduced height and reduced width, see which one gets better coverage
                     # reduce height
                     max_sku = max(bundle.skus, key=lambda s: s.y + s.height, default=None)
-                    temp_temp_height = round(bundle.height - min(max_sku.height - 1, 20))
-                    bundle_reduced_height = Bundle(temp_width, temp_temp_height, MAX_LENGTH)
+                    temp_temp_height = round(bundle.height - min(max_sku.height + 1, 20))
+                    bundle_reduced_height = Bundle(temp_width, temp_temp_height, MAX_LENGTH, packing_machine=machine)
                     _ = _pack_single_bundle(skus_copy, bundle_reduced_height)
                     height_ceiling_coverage = _has_sufficient_ceiling_coverage(bundle_reduced_height, get_value=True)
 
                     # reduce width
-                    temp_temp_width = round(bundle.width - 20)
-                    bundle_reduced_width = Bundle(temp_temp_width, temp_height, MAX_LENGTH)
+                    max_sku = max(bundle.skus, key=lambda s: s.x + s.width, default=None)
+                    temp_temp_width = round(bundle.width - min(max_sku.width + 1, 20))
+                    bundle_reduced_width = Bundle(temp_temp_width, temp_height, MAX_LENGTH, packing_machine=machine)
                     _ = _pack_single_bundle(skus_copy, bundle_reduced_width)
                     width_ceiling_coverage = _has_sufficient_ceiling_coverage(bundle_reduced_width, get_value=True)
 
                     # compare
-                    if round(height_ceiling_coverage, 2) > round(width_ceiling_coverage, 2):
+                    if height_ceiling_coverage > width_ceiling_coverage:
                         temp_height = temp_temp_height
                     else:
                         temp_width = temp_temp_width
@@ -243,7 +252,7 @@ def _pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: i
             # Create bundle with largest SKU only
             bundle_length = 3680 if (largest_sku.length < 3700) else 7340
             largest_sku.width, largest_sku.height = _get_sku_dimensions(largest_sku, False)  # un-rotate
-            new_bundle = Bundle(largest_sku.width, largest_sku.height, bundle_length)
+            new_bundle = Bundle(largest_sku.width, largest_sku.height, bundle_length, packing_machine=machine)
             new_bundle.add_sku(largest_sku, 0, 0, False)  # Place SKU without rotation
             # find any stackable SKUs
             remaining_skus.remove(largest_sku)
@@ -274,7 +283,7 @@ def _stack_skus_flat(bundle: Bundle, sku_groups: dict = {}) -> None:
         # sort groups by length, then width of largest SKU in group
         current_y = 0
         max_width = max(sku.width for sku in bundle.skus)
-        new_bundle = Bundle(max_width, bundle.height, max(sku.length for sku in bundle.skus))
+        new_bundle = Bundle(max_width, bundle.height, max(sku.length for sku in bundle.skus), packing_machine=bundle.packing_machine)
 
         single_groups = [group for group in sku_groups if len(sku_groups[group]) == 1]
         stack_eligible_skus = []
@@ -304,7 +313,7 @@ def _stack_skus_flat(bundle: Bundle, sku_groups: dict = {}) -> None:
                 # If adding this group exceeds bundle width or weight, stop packing and create new bundle
                 new_bundle.resize_to_content()
                 bundles.append(new_bundle)
-                new_bundle = Bundle(max_width, bundle.height, MAX_LENGTH)
+                new_bundle = Bundle(max_width, bundle.height, MAX_LENGTH, packing_machine=bundle.packing_machine)
 
             for sku in reversed(group):
                 if current_y == 0 or _has_sufficient_support(0, current_y, sku.width, new_bundle):
@@ -863,8 +872,8 @@ def _has_sufficient_ceiling_coverage(bundle: Bundle, get_value: bool = False) ->
     copy_bundle = copy.deepcopy(bundle)
     copy_bundle.resize_to_content()
     _add_filler_material(copy_bundle)
-    buffer = 25
-    required_coverage = 0.9 # % coverage required
+    buffer = MAX_DIST_FROM_CEILING
+    required_coverage = MIN_CEILING_COVERAGE # % coverage required
 
     if not copy_bundle.skus:
         return False
@@ -881,8 +890,9 @@ def _has_sufficient_ceiling_coverage(bundle: Bundle, get_value: bool = False) ->
         return total_coverage / (copy_bundle.width)
     return total_coverage >= copy_bundle.width * required_coverage
 
-def _has_sufficient_support(x: int, y: int, width: int, bundle: Bundle, threshold: float = 0.85, get_value: bool = False) -> bool:
+def _has_sufficient_support(x: int, y: int, width: int, bundle: Bundle, get_value: bool = False) -> bool:
     """Check if position has sufficient support from SKUs below"""
+    threshold = BASE_COVERAGE_THRESHOLD
     buffer = 10
     support_segments = []
     # Loop through SKUs to find overlaps
@@ -1004,12 +1014,12 @@ def _find_stackable_skus(target_sku: SKU, remaining_skus: List[SKU], unavailable
 def _skus_compatible_for_stacking(sku1: SKU, sku2: SKU) -> bool:
     """Check if two SKUs are compatible for stacking based on dimensions and properties"""
     # Check if candidate sku is within 13mm of target sku width and height
-    return (abs(sku1.width - sku2.width) <= 13 and
-            abs(sku1.height - sku2.height) <= 13)
+    return (abs(sku1.width - sku2.width) <= STACKING_MAX_DIFF and
+            abs(sku1.height - sku2.height) <= STACKING_MAX_DIFF)
 
 def _sku_within_height_range(sku: SKU, row_skus: List) -> bool:
     """Check if SKU is within height tolerance of previous SKU"""
-    height_tol = 100 # mm tolerance for height matching
+    height_tol = SKU_MAX_HEIGHT_DIFF # mm tolerance for height matching
     if not row_skus:
         return True
     last_sku_height = row_skus[-1][1].height

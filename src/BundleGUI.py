@@ -45,10 +45,32 @@ class Ui_MainWindow:
         self.ui.openImages.clicked.connect(self.openImages)
         self.ui.openExcel.clicked.connect(self.openExcel)
         self.ui.helpButton.clicked.connect(self.openHelp)
+        self.ui.metricButton.clicked.connect(self.setMetricUnits)
+        self.ui.imperialButton.clicked.connect(self.setImperialUnits)
 
         self.workingDir = None  # to hold the directory of the selected Excel file
+        self.disabledButton = "background-color: rgb(39, 39, 39);"
+        self.enabledButton = "background-color: rgb(0, 90, 180);"
+        self.setMetricUnits()  # Set default units to metric
+        self.set_unit = 'metric'  # to hold the current unit system
 
 ## QT Connection Methods (camelCase)
+
+    def setMetricUnits(self):
+        """
+        Set the units to metric (mm, kg)
+        """
+        self.unit = 'metric'
+        self.ui.metricButton.setStyleSheet(self.enabledButton)
+        self.ui.imperialButton.setStyleSheet(self.disabledButton)
+
+    def setImperialUnits(self):
+        """
+        Set the units to imperial (inches, lbs)
+        """
+        self.unit = 'imperial'
+        self.ui.imperialButton.setStyleSheet(self.enabledButton)
+        self.ui.metricButton.setStyleSheet(self.disabledButton)
 
     def getInputWorkbook(self):
         """
@@ -102,12 +124,13 @@ class Ui_MainWindow:
         self.removed_skus = []  # to hold SKUs that were removed during optimization
         self.mach1_skus = []  # to hold SKUs that are packed with Mach1
         self.append_data = False  # to indicate if we are appending data to an existing workbook
+        self.set_unit = self.unit
 
         self.ui.progressLabel.setText("Getting data for new orders...")
         self.ui.progressBar.setValue(10)
         # Get data from input workbook
         try:
-            self.workbook = openpyxl.load_workbook(self.ui.excelDir.text())
+            self.workbook = openpyxl.load_workbook(self.ui.excelDir.text(), data_only=True)
             data = self.get_data(self.workbook)
         except Exception as e:
             self.show_alert("Error", "Unable to retrieve data from the Excel file. Is it already open?", "error")
@@ -128,15 +151,20 @@ class Ui_MainWindow:
         # get unique orders
         unique_orders = list(data['OrderNbr'].unique())
 
-        self.ui.progressLabel.setText("Getting data from existing bundles...")
-        self.ui.progressBar.setValue(15)
-        QApplication.processEvents()
         if self.ui.appendDir.text():
+            self.ui.progressLabel.setText("Getting data from existing bundles...")
+            self.ui.progressBar.setValue(15)
+            QApplication.processEvents()
             self.appendWorkbook = openpyxl.load_workbook(self.ui.appendDir.text())
             self.append_data = True
             unique_orders, self.appendWorkbook = self.remove_optimized_orders(unique_orders, self.appendWorkbook)
             if not unique_orders:
                 self.show_alert("No Orders", "All selected orders have already been optimized in the append workbook.", "info")
+                self.ui.progressBar.setValue(0)
+                self.ui.progressLabel.setText("")
+                return
+            elif unique_orders == -1:
+                self.show_alert("Error", "Unit mismatch between the program input and the append workbook.\nPlease ensure the units of measurement are consistent.", "error")
                 self.ui.progressBar.setValue(0)
                 self.ui.progressLabel.setText("")
                 return
@@ -160,6 +188,11 @@ class Ui_MainWindow:
 
         order_skus = self.remove_invalids(order_skus)
 
+        # convert orders from numpy floats to ints
+        for order in reversed(order_skus.keys()):
+            if isinstance(order, np.float64) or isinstance(order, np.int64):
+                order_skus[int(order)] = order_skus.pop(order)
+
         self.ui.progressBar.setValue(20)
         images_dir = f"{self.workingDir}/images"
         os.makedirs(images_dir, exist_ok=True)
@@ -180,7 +213,7 @@ class Ui_MainWindow:
             bundles, self.removed_skus = pack_skus(skus, self.maxWidth, self.maxHeight, self.mach1_skus)
             order_bundles[order] = bundles
 
-            visualize_bundles(bundles, f"{images_dir}/Order_{order}.png")
+            visualize_bundles(bundles, f"{images_dir}/Order_{order}.png", self.set_unit)
         self.images_dir = images_dir
 
         # write the packed bundles to a new sheet in the workbook
@@ -277,11 +310,19 @@ class Ui_MainWindow:
         """
         if "Optimized_Bundles" not in workbook.sheetnames:
             return orders, workbook
-
+        
         optimized_sheet = workbook["Optimized_Bundles"]
         # remove table formatting if it exists
         if "OptimizedBundlesTable" in optimized_sheet.tables:
             del optimized_sheet.tables["OptimizedBundlesTable"]
+
+        # Check if units match
+        for header in optimized_sheet[1]:
+            if 'Width' in header.value or 'Height' in header.value or 'Length' in header.value:
+                if self.set_unit == 'imperial' and '_mm' in header.value:
+                    return -1, workbook  # units mismatch
+                if self.set_unit == 'metric' and '_in' in header.value:
+                    return -1, workbook
 
         # find orders that have been updated since last optimization (the 'OptimizedOn' column is earlier than the 'LastModifiedOn' column)
         orders_to_remove = []
@@ -597,8 +638,27 @@ class Ui_MainWindow:
         self.headers.insert(6, 'TotalPcs')
         self.headers.insert(3, 'ApprovedBy')
         self.headers.insert(3, 'ReviewedBy')
+        self.headers.insert(3, 'Machine')
         self.headers.insert(2, 'BundleNbr')
         self.headers.append('OptimizedOn')
+
+        if self.set_unit == 'imperial':
+            for i, header in enumerate(self.headers):
+                if header == 'Width_mm':
+                    self.headers[i] = 'Width_in'
+                elif header == 'Height_mm':
+                    self.headers[i] = 'Height_in'
+                elif header == 'Length_mm':
+                    self.headers[i] = 'Length_in'
+                elif header == 'Weight_kg':
+                    self.headers[i] = 'Weight_lbs'
+
+            length_divisor = 25.4
+            weight_multiplier = 2.20462
+        else:
+            length_divisor = 1
+            weight_multiplier = 1
+
         if not self.append_data:
             optimized_sheet.append(self.headers)
 
@@ -628,6 +688,7 @@ class Ui_MainWindow:
                             order,
                             0,
                             sku.data['Bdl_Override'],
+                            '',  # Machine
                             '',  # ReviewedBy
                             '',  # ApprovedBy
                             sku.id,
@@ -690,16 +751,17 @@ class Ui_MainWindow:
                             order,
                             bundle_index + 1,
                             sku_data['sku'].data['Bdl_Override'],
+                            bundle.packing_machine,
                             '',  # ReviewedBy
                             '',  # ApprovedBy
                             sku_id,
                             sku_data['qty'],
                             round(sku_data['sku'].bundleqty),
                             round(sku_data['qty'] * sku_data['sku'].bundleqty),
-                            round(actual_width),
-                            round(actual_height),
-                            round(bundle.max_length),
-                            round(total_weight),
+                            round(actual_width / length_divisor),
+                            round(actual_height / length_divisor),
+                            round(bundle.max_length / length_divisor),
+                            round(total_weight * weight_multiplier),
                             sku_data['sku'].data['UOM'],
                             sku_data['sku'].desc,
                             sku_data['sku'].data['ShipTo'],

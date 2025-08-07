@@ -3,11 +3,13 @@ import matplotlib.patches as patches
 import random
 from typing import List
 import numpy as np
+import copy
 
 from bundle_classes import Bundle
 
 
-def visualize_bundles(bundles: List[Bundle], savePath: str = None) -> None:
+def visualize_bundles(original_bundles: List[Bundle], savePath: str = None, unit: str = 'metric') -> None:
+    bundles = copy.deepcopy(original_bundles)
     num_bundles = len(bundles)
     try:
         fig, axs = plt.subplots(1, num_bundles, figsize=(6 * num_bundles, 6))
@@ -25,21 +27,42 @@ def visualize_bundles(bundles: List[Bundle], savePath: str = None) -> None:
         # Use actual bundle dimensions for visualization
         actual_width, actual_height, max_length = bundle.get_actual_dimensions()
 
-        ax.set_title(f"Bundle {idx + 1}\n({actual_width:.0f}x{actual_height:.0f}x{max_length:.0f}mm, {bundle.get_total_weight():.2f}kg)")
+        weight_kg = bundle.get_total_weight()
+        if unit == 'imperial':
+            actual_width /= 25.4
+            actual_height /= 25.4
+            max_length /= 25.4
+            weight_kg *= 2.20462
+            weight_unit = 'lbs'
+            length_unit = 'in'
+            ticks = 2
+            length_divisor = 25.4
+        else:
+            weight_unit = 'kg'
+            length_unit = 'mm'
+            ticks = 50
+            length_divisor = 1
+
+        ax.set_title(f"Bundle {idx + 1}\n({actual_width:.0f}x{actual_height:.0f}x{max_length:.0f}{length_unit}, {weight_kg:.2f}{weight_unit})")
         ax.set_xlim(0, actual_width)
         ax.set_ylim(0, actual_height)
         ax.set_aspect('equal')
         # set ticks every 25mm
         if bundle.height > 400 or bundle.width > 400:
-            ax.set_xticks(np.arange(0, actual_width, 50))
-            ax.set_yticks(np.arange(0, actual_height, 50))
+            ax.set_xticks(np.arange(0, actual_width, ticks))
+            ax.set_yticks(np.arange(0, actual_height, ticks))
         else:
-            ax.set_xticks(np.arange(0, actual_width, 25))
-            ax.set_yticks(np.arange(0, actual_height, 25))
+            ax.set_xticks(np.arange(0, actual_width, ticks/2))
+            ax.set_yticks(np.arange(0, actual_height, ticks/2))
         ax.grid(False)
 
         sku_locations = {}
         for sku in bundle.skus:
+            # Convert SKU to accurate unit
+            sku.x /= length_divisor
+            sku.y /= length_divisor
+            sku.width /= length_divisor
+            sku.height /= length_divisor
             loc_key = (sku.x, sku.y)
             if loc_key not in sku_locations:
                 sku_locations[loc_key] = []
