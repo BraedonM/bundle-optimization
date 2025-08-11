@@ -8,7 +8,7 @@ MAX_WEIGHT = 1000 # kg
 BOTTOM_ROW_LENGTH = 0
 REMOVED_SKUS = []
 
-MIN_CEILING_COVERAGE = 0.8  # Minimum ceiling coverage required (%)
+MIN_CEILING_COVERAGE = 0.85  # Minimum ceiling coverage required (%)
 MAX_DIST_FROM_CEILING = 30  # mm, maximum distance from ceiling to be considered sufficient coverage
 STACKING_MAX_DIFF = 13  # mm, maximum difference in width and height for lengthwise stacking SKUs
 SKU_MAX_HEIGHT_DIFF = 50  # mm, maximum height difference for SKUs to be considered compatible in a row
@@ -23,7 +23,9 @@ def pack_skus(skus: List[SKU], bundle_width: int, bundle_height: int, mach1_skus
     regular_skus = [sku for sku in skus if sku not in override_skus]
 
     # Process override bundles first
-    override_bundles = _process_override_bundles(override_skus, bundle_width, bundle_height)
+    override_bundles = _process_override_bundles(override_skus, bundle_width, bundle_height, mach1_skus)
+    if override_bundles == -1:
+        return -1, REMOVED_SKUS
 
     # Group SKUs by color
     color_groups = _group_skus_by_color(regular_skus)
@@ -61,6 +63,7 @@ def pack_skus(skus: List[SKU], bundle_width: int, bundle_height: int, mach1_skus
 
 def _try_merge_bundles(bundles: List[Bundle], bundle_width: int, bundle_height: int, machine: str) -> List[Bundle]:
     """Attempt to merge bundles if they can all fit in one bundle"""
+    attempted_merged_bundles = []
     best_bundles = []
     mid_bundles = []
     bad_bundles = []
@@ -86,6 +89,12 @@ def _try_merge_bundles(bundles: List[Bundle], bundle_width: int, bundle_height: 
                 bundle1 = bundles[i]
                 bundle2 = bundles[j]
 
+                # identify if bundles have already been attempted to be merged
+                if [id(bundle1), id(bundle2)] in attempted_merged_bundles or [id(bundle2), id(bundle1)] in attempted_merged_bundles:
+                    continue
+                else:
+                    attempted_merged_bundles.append([id(bundle1), id(bundle2)])
+
                 # get all SKUs from both bundles
                 all_skus = bundle1.skus + bundle2.skus
                 # deconstruct PlacedSKU objects into just SKU objects for consistency
@@ -98,7 +107,7 @@ def _try_merge_bundles(bundles: List[Bundle], bundle_width: int, bundle_height: 
                     or (bundle1.get_total_weight() + bundle2.get_total_weight() > MAX_WEIGHT)):
                     continue
                 # try to pack them into a new bundle
-                merged_bundles = _pack_skus_with_pattern(all_skus, bundle_width, bundle_height, merging=True, machine=machine)
+                merged_bundles = _pack_skus_with_pattern(all_skus, bundle_width, bundle_height, machine=machine, merging=True)
                 if len(merged_bundles) == 1:
                     # if they fit into one bundle, remove the original bundles
                     bundles.pop(j)
@@ -290,6 +299,7 @@ def _stack_skus_flat(bundle: Bundle, sku_groups: dict = {}) -> None:
         for group in single_groups:
             stack_eligible_skus.extend(sku_groups[group])
         empty_groups = []
+        # try to find stackable SKUs for each single group
         for i, sku in enumerate(stack_eligible_skus):
             stackable_skus = _find_stackable_skus(sku, stack_eligible_skus, set(), i, new_bundle.max_length, False)
             # select the largest stackable SKU and add it to the group
@@ -305,7 +315,9 @@ def _stack_skus_flat(bundle: Bundle, sku_groups: dict = {}) -> None:
         for empty_group in list(set(empty_groups)):
             del sku_groups[empty_group]
 
+        # sort groups by x position
         sorted_groups = sorted(sku_groups.items(), key=lambda item: (max(sku.length for sku in item[1]), max(sku.width for sku in item[1])), reverse=False)
+        # try to pack each group into the bundle
         for x, group in reversed(sorted_groups):
             max_height = max(sku.height for sku in group)
             total_weight = sum(sku.weight for sku in group)
@@ -313,15 +325,18 @@ def _stack_skus_flat(bundle: Bundle, sku_groups: dict = {}) -> None:
                 # If adding this group exceeds bundle width or weight, stop packing and create new bundle
                 new_bundle.resize_to_content()
                 bundles.append(new_bundle)
-                new_bundle = Bundle(max_width, bundle.height, MAX_LENGTH, packing_machine=bundle.packing_machine)
+                # find new max width with remaining skus in sku_groups
+                max_width = max(max(sku.width for sku in sku_groups[x]) for x in sku_groups)
+                current_y = 0
+                new_bundle = Bundle(max_width, max_width, MAX_LENGTH, packing_machine=bundle.packing_machine)
 
             for sku in reversed(group):
                 if current_y == 0 or _has_sufficient_support(0, current_y, sku.width, new_bundle):
                     new_bundle.add_sku(sku, 0, current_y, False)  # Place SKU without rotation
+                    current_y += sku.height
                     sku_groups[x].remove(sku)
             if not sku_groups[x]:
                 del sku_groups[x]
-            current_y += max_height
         if new_bundle.skus:
             new_bundle.resize_to_content()
             bundles.append(new_bundle)
@@ -820,7 +835,7 @@ def _group_skus_by_color(skus: List[SKU]) -> dict:
         color_groups[color].append(sku)
     return color_groups
 
-def _process_override_bundles(skus: List[SKU], bundle_width: int, bundle_height: int) -> List[Bundle]:
+def _process_override_bundles(skus: List[SKU], bundle_width: int, bundle_height: int, mach1_skus: List[SKU]) -> List[Bundle]:
     """Process SKUs with bundle override"""
     if not skus:
         return []
@@ -833,10 +848,18 @@ def _process_override_bundles(skus: List[SKU], bundle_width: int, bundle_height:
 
     bundles = []
     for override_skus in override_groups.values():
+        # return an error if MACH1 and MACH5 skus are mixed
+        color_groups = _group_skus_by_color(override_skus)
+        color_groups = [col[-3:] for col in color_groups.keys()]
+        if 0 < len(set(color_groups).intersection(set(mach1_skus))) < len(color_groups):
+            return -1
+        machine = "MACH1" if any(sku.id[-3:] in mach1_skus for sku in override_skus) else "MACH5"
         override_skus.sort(key=lambda x: max(x.height, x.width), reverse=True)
 
-        current_bundles = _pack_skus_with_pattern(override_skus, bundle_width, bundle_height)
-        for bundle in current_bundles:
+        current_bundles = _pack_skus_with_pattern(override_skus, bundle_width, bundle_height, machine=machine)
+        # attempt to merge in case of any missed space
+        merged_bundles = _try_merge_bundles(current_bundles, bundle_width, bundle_height, machine=machine)
+        for bundle in merged_bundles:
             if bundle.skus:
                 bundles.append(bundle)
 

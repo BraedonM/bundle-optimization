@@ -17,7 +17,23 @@ from bundle_classes import SKU, create_packaging_classes
 from bundle_visualize import visualize_bundles
 from bundle_packing import pack_skus
 
-class Ui_MainWindow:
+def excepthook(type, value, traceback):
+    """
+    Handle exceptions
+    """
+    try:
+        errorString = (
+            f"An error occurred:\n\n{value}"
+            + f"\n\n{traceback.tb_frame.f_code.co_name} in "
+            + f"{(traceback.tb_frame.f_code.co_filename).split("\\")[-1]} "
+            + f"(line {traceback.tb_lineno})"
+        )
+    except Exception:
+        errorString = "An error occurred."
+		
+    QMessageBox.critical(None, "Error", errorString)
+
+class ProgramGUI:
     def __init__(self):
         self.Widget = QWidget()
         self.ui = Ui_BundleOptimizer()
@@ -133,7 +149,7 @@ class Ui_MainWindow:
             self.workbook = openpyxl.load_workbook(self.ui.excelDir.text(), data_only=True)
             data = self.get_data(self.workbook)
         except Exception as e:
-            self.show_alert("Error", "Unable to retrieve data from the Excel file. Is it already open?", "error")
+            self.show_alert("Error", "Unable to retrieve data from the Excel file.\nEnsure the file is not open and the path is correct.", "error")
             self.ui.progressBar.setValue(0)
             self.ui.progressLabel.setText("")
             return
@@ -209,8 +225,13 @@ class Ui_MainWindow:
             if skus == []:
                 order_bundles[order] = []
                 continue
-            self.ui.progressBar.setValue(int(round(20 + 70 * (list(order_skus.keys()).index(order) + 1) / len(order_skus))))
+            self.ui.progressBar.setValue(int(round(20 + 70 * (list(order_skus.keys()).index(order)) / len(order_skus))))
             bundles, self.removed_skus = pack_skus(skus, self.maxWidth, self.maxHeight, self.mach1_skus)
+            if bundles == -1:
+                self.show_alert("Error", "Cannot mix MACH1 and MACH5 SKUs in the same bundle override.", "error")
+                self.ui.progressBar.setValue(0)
+                self.ui.progressLabel.setText("")
+                return
             order_bundles[order] = bundles
 
             visualize_bundles(bundles, f"{images_dir}/Order_{order}.png", self.set_unit)
@@ -360,7 +381,7 @@ class Ui_MainWindow:
             optimized_sheet.append([])  # add a blank row at the end to separate orders
             workbook.save(self.ui.appendDir.text())
         except Exception as e:
-            self.show_alert("Error", f"Error with the existing optimized data file. Is it already open? Error: {e}", "error")
+            self.show_alert("Error", f"Error with the existing optimized data file.\nEnsure the path is correct and the file is not open. Error: {e}", "error")
             return [], workbook
         return orders, workbook
 
@@ -421,12 +442,12 @@ class Ui_MainWindow:
                 df.loc[df_row_idx, 'Width_mm'] = row['Width (mm)']
                 df.loc[df_row_idx, 'Height_mm'] = row['Height (mm)']
                 df.loc[df_row_idx, 'Length_mm'] = row['Length (mm)']
-                df.loc[df_row_idx, 'Weight_kg'] = float(row['Weight kg/bundle'] * df.loc[df_row_idx, 'BaseOrderQty'] / df.loc[df_row_idx, 'Quantity'])
+                df.loc[df_row_idx, 'Weight_kg'] = float(row['Weight kg/bundle'])# / row['Qty/bundle'] * df.loc[df_row_idx, 'BaseOrderQty'])
                 df.loc[df_row_idx, 'Dim_shrink'] = row['Partial Dim To Reduce']
                 df.loc[df_row_idx, 'Can_be_bottom'] = can_be_bottom
 
         # iterate through df and convert qty (in pieces) to qty (in bundles)
-        df['Quantity'] = df['Quantity'].astype(float)
+        df['Quantity'] = df['BaseOrderQty'].astype(float)
         seen_skus = {}  # to track seen SKUs in case of multiple entries
         self.override_orders = []
         for index, row in df.iterrows():
@@ -435,16 +456,16 @@ class Ui_MainWindow:
                     if row['Bdl_Override'] and row['OrderNbr'] not in self.override_orders:
                         self.override_orders.append(row['OrderNbr'])
                     # convert Quantity to Pcs/Bundle
-                    whole_qty = floor(ceil(abs(row['Quantity'])) / row['Pcs/Bundle'])
+                    whole_qty = floor(abs(row['Quantity'])) / row['Pcs/Bundle']
                     fraction_remaining = (ceil(abs(row['Quantity'])) % row['Pcs/Bundle']) / row['Pcs/Bundle']
 
-                    if f'{row['OrderNbr']}_{row['InventoryID']}' in seen_skus.keys():
+                    if f'{row['OrderNbr']}_{row['InventoryID']}_{row['Bdl_Override']}' in seen_skus.keys():
                         # add new qty to existing SKU data
-                        df.loc[seen_skus[f'{row['OrderNbr']}_{row['InventoryID']}'], 'Quantity'] += (float(whole_qty) + float(fraction_remaining))
+                        df.loc[seen_skus[f'{row['OrderNbr']}_{row['InventoryID']}_{row['Bdl_Override']}'], 'Quantity'] += (float(whole_qty) + float(fraction_remaining))
                         df.loc[index, 'Quantity'] = 0  # set current row to 0
                     else:
                         # create new SKU entry
-                        seen_skus[f'{row['OrderNbr']}_{row['InventoryID']}'] = index
+                        seen_skus[f'{row['OrderNbr']}_{row['InventoryID']}_{row['Bdl_Override']}'] = index
                         df.loc[index, 'Quantity'] = float(whole_qty) + float(fraction_remaining)
 
                 except ZeroDivisionError:
@@ -662,7 +683,6 @@ class Ui_MainWindow:
         if not self.append_data:
             optimized_sheet.append(self.headers)
 
-        top_groups = []
         bottom_groups = []
 
         # add data for each order's bundles
@@ -670,11 +690,91 @@ class Ui_MainWindow:
             bundles = order_bundles[order]
             self.ui.progressBar.setValue(int(round(90 + 5 * ((orderIdx + 1) / len(order_bundles)))))
             QApplication.processEvents()
+
+            # add a row with total order summary (only if there are bundles)
+            if bundles:
+                total_sub_bundles = sum([len(bundle.skus) for bundle in bundles])
+                total_pcs = sum([sku.bundleqty for bundle in bundles for sku in bundle.skus])
+
+                total_weight = sum([bundle.get_total_weight() for bundle in bundles])
+                optimized_sheet.append([
+                    bundles[0].skus[0].data['OrderType'],
+                    order,
+                    'ALL',  # BundleNbr
+                    '',  # Bdl_Override
+                    '',  # Machine
+                    '',  # ReviewedBy
+                    '',  # ApprovedBy
+                    'Total_Order',
+                    total_sub_bundles,
+                    'N/A',
+                    total_pcs,
+                    'N/A',
+                    'N/A',
+                    'N/A',
+                    round(total_weight * weight_multiplier),
+                    '',
+                    'Total Order Summary',
+                    bundles[0].skus[0].data['ShipTo'],
+                    bundles[0].skus[0].data['AddressLine1'],  # AddressLine1
+                    bundles[0].skus[0].data['AddressLine2'],  # AddressLine2
+                    bundles[0].skus[0].data['City'],  # City
+                    bundles[0].skus[0].data['State'],  # State
+                    bundles[0].skus[0].data['Country'],  # Country
+                    bundles[0].skus[0].data['Status'],  # Status
+                    bundles[0].skus[0].data['OrderDate'].strftime("%Y-%m-%d") if bundles[0].skus[0].data['OrderDate'] else None,  # OrderDate
+                    bundles[0].skus[0].data['ProdReleaseDate'].strftime("%Y-%m-%d") if bundles[0].skus[0].data['ProdReleaseDate'] else None,  # ProdReleaseDate
+                    bundles[0].skus[0].data['SchedShipDate'].strftime("%Y-%m-%d") if bundles[0].skus[0].data['SchedShipDate'] else None,  # SchedShipDate
+                    bundles[0].skus[0].data['TargetArrival'],  # TargetArrival
+                    bundles[0].skus[0].data['NotBefore'],  # NotBefore
+                    bundles[0].skus[0].data['ShipVia'],  # ShipVia
+                    bundles[0].skus[0].data['LastModifiedOn'].strftime("%Y-%m-%d") if bundles[0].skus[0].data['LastModifiedOn'] else None,  # LastModifiedOn
+                    datetime.now().strftime("%Y-%m-%d"),
+                ])
+
             # add missing/removed skus as part of bundle "0"
             if order in [sku.data['OrderNbr'] for sku in self.missingDataSKUs]:
+
+                order_missing = [sku for sku in self.missingDataSKUs if sku.data['OrderNbr'] == order]
+                # add a summary row for missing SKUs
+                optimized_sheet.append([
+                    order_missing[0].data['OrderType'],
+                    order,
+                    '0_ALL',  # BundleNbr
+                    '',  # Bdl_Override
+                    '',  # Machine
+                    '',  # ReviewedBy
+                    '',  # ApprovedBy
+                    'Missing_SKUs',
+                    len(order_missing),  # TotalPcs
+                    'N/A',  # BundleQty
+                    'N/A',  # Total Bundle Qty
+                    'N/A',  # Width
+                    'N/A',  # Height
+                    'N/A',  # Length
+                    'N/A',  # Weight
+                    '',  # UOM
+                    'Missing SKUs Summary',
+                    order_missing[0].data['ShipTo'],
+                    order_missing[0].data['AddressLine1'],  # AddressLine1
+                    order_missing[0].data['AddressLine2'],  # AddressLine2
+                    order_missing[0].data['City'],  # City
+                    order_missing[0].data['State'],  # State
+                    order_missing[0].data['Country'],  # Country
+                    order_missing[0].data['Status'],  # Status
+                    order_missing[0].data['OrderDate'].strftime("%Y-%m-%d") if order_missing[0].data['OrderDate'] else None,  # OrderDate
+                    order_missing[0].data['ProdReleaseDate'].strftime("%Y-%m-%d") if order_missing[0].data['ProdReleaseDate'] else None,  # ProdReleaseDate
+                    order_missing[0].data['SchedShipDate'].strftime("%Y-%m-%d") if order_missing[0].data['SchedShipDate'] else None,  # SchedShipDate
+                    order_missing[0].data['TargetArrival'],  # TargetArrival
+                    order_missing[0].data['NotBefore'],  # NotBefore
+                    order_missing[0].data['ShipVia'],  # ShipVia
+                    order_missing[0].data['LastModifiedOn'].strftime("%Y-%m-%d") if order_missing[0].data['LastModifiedOn'] else None,  # LastModifiedOn
+                    datetime.now().strftime("%Y-%m-%d"),
+                ])
+
                 # add a row for each missing SKU
                 written_skus = set()  # to avoid writing the same SKU multiple times
-                for sku in self.missingDataSKUs:
+                for sku in order_missing:
                     if sku.id in written_skus:
                         continue
                     else:
@@ -695,10 +795,10 @@ class Ui_MainWindow:
                             quantity,
                             round(sku.bundleqty) if sku.bundleqty else "N/A",  # default to 1 if bundleqty is None
                             "N/A" if not sku.bundleqty else round(quantity * sku.bundleqty),
-                            "N/A",
-                            "N/A",
-                            "N/A",
-                            "N/A",
+                            sku.width / length_divisor if sku.width else "N/A",
+                            sku.height / length_divisor if sku.height else "N/A",
+                            sku.length / length_divisor if sku.length else "N/A",
+                            round(sku.weight * weight_multiplier) if sku.weight else "N/A",
                             sku.data['UOM'],
                             sku.desc,
                             sku.data['ShipTo'],
@@ -731,19 +831,60 @@ class Ui_MainWindow:
                 actual_width, actual_height, _ = bundle.get_actual_dimensions()
                 total_weight = bundle.get_total_weight()
 
+                # add summary row for the bundle
+                optimized_sheet.append([
+                    bundle.skus[0].data['OrderType'],
+                    order,
+                    f'{bundle_index + 1}_ALL',  # BundleNbr
+                    bundle.skus[0].data['Bdl_Override'] if bundle.skus[0].data['Bdl_Override'] else '',  # Bdl_Override
+                    bundle.packing_machine,  # Machine
+                    '',  # ReviewedBy
+                    '',  # ApprovedBy
+                    f'Total_Bundle_{bundle_index + 1}',  # SKU
+                    len(bundle.skus),  # TotalPcs
+                    'N/A',  # BundleQty
+                    sum(round(sku.bundleqty) for sku in bundle.skus),
+                    round(actual_width / length_divisor),
+                    round(actual_height / length_divisor),
+                    round(bundle.max_length / length_divisor),
+                    round(total_weight * weight_multiplier),
+                    '',  # UOM
+                    f'Bundle {bundle_index + 1} Summary',  # Description
+                    bundle.skus[0].data['ShipTo'],
+                    bundle.skus[0].data['AddressLine1'],  # AddressLine1
+                    bundle.skus[0].data['AddressLine2'],  # AddressLine2
+                    bundle.skus[0].data['City'],  # City
+                    bundle.skus[0].data['State'],  # State
+                    bundle.skus[0].data['Country'],  # Country
+                    bundle.skus[0].data['Status'],  # Status
+                    bundle.skus[0].data['OrderDate'].strftime("%Y-%m-%d") if bundles[0].skus[0].data['OrderDate'] else None,  # OrderDate
+                    bundle.skus[0].data['ProdReleaseDate'].strftime("%Y-%m-%d") if bundles[0].skus[0].data['ProdReleaseDate'] else None,  # ProdReleaseDate
+                    bundle.skus[0].data['SchedShipDate'].strftime("%Y-%m-%d") if bundles[0].skus[0].data['SchedShipDate'] else None,  # SchedShipDate
+                    bundle.skus[0].data['TargetArrival'],  # TargetArrival
+                    bundle.skus[0].data['NotBefore'],  # NotBefore
+                    bundle.skus[0].data['ShipVia'],  # ShipVia
+                    bundle.skus[0].data['LastModifiedOn'].strftime("%Y-%m-%d") if bundles[0].skus[0].data['LastModifiedOn'] else None,  # LastModifiedOn
+                    datetime.now().strftime("%Y-%m-%d"),
+                ])
+
                 packaging_skus_active = False
                 packaging_idx = 2
                 # write each SKU in the bundle to the sheet
                 for sku_id, sku_data in sku_counts.items():
+                    # fix length of SKU ID
+                    if sku_data['sku'].length == 3650:
+                        sku_data['sku'].length = 3680
+
                     if "Pack_Angle" in sku_id and not packaging_skus_active:
                         packaging_skus_active = True
                         packaging_idx = optimized_sheet.max_row + 2
                     # check if data is None (this happens for Packaging SKUs)
                     if sku_data['sku'].data is None:
-                        # give data from another SKU in the order, since they are the same
+                        # give data from another SKU in the order, since they are the same (except UOM)
                         for _, nested_sku_data in sku_counts.items():
                             if nested_sku_data['sku'].data is not None:
                                 sku_data['sku'].data = nested_sku_data['sku'].data
+                                sku_data['sku'].data['UOM'] = ''
                                 break
                     try:
                         optimized_sheet.append([
@@ -758,10 +899,10 @@ class Ui_MainWindow:
                             sku_data['qty'],
                             round(sku_data['sku'].bundleqty),
                             round(sku_data['qty'] * sku_data['sku'].bundleqty),
-                            round(actual_width / length_divisor),
-                            round(actual_height / length_divisor),
-                            round(bundle.max_length / length_divisor),
-                            round(total_weight * weight_multiplier),
+                            round(sku_data['sku'].width / length_divisor),
+                            round(sku_data['sku'].height / length_divisor),
+                            round(sku_data['sku'].length / length_divisor),
+                            round(sku_data['sku'].weight * weight_multiplier),
                             sku_data['sku'].data['UOM'],
                             sku_data['sku'].desc,
                             sku_data['sku'].data['ShipTo'],
@@ -785,9 +926,7 @@ class Ui_MainWindow:
                         self.show_alert("Error", f"Error writing SKU {sku_id} to the sheet: {e}", "error")
                         return
                 if packaging_skus_active:
-                    bottom_groups.append([packaging_idx - 1, optimized_sheet.max_row])
-            # group the rows by order number in Excel
-            top_groups.append([optimized_sheet.max_row - order_row_count + 2, optimized_sheet.max_row])
+                    bottom_groups.extend(range(packaging_idx - 1, optimized_sheet.max_row))
             # add a blank row after each order's bundles
             optimized_sheet.append([])
 
@@ -803,16 +942,22 @@ class Ui_MainWindow:
         # resize the table to fit the data
         optimized_sheet.add_table(table)
 
+        optimized_sheet.row_dimensions[optimized_sheet.max_row+1].outlineLevel = 1
+
         # if two blank rows in a row, remove the first one
         for row in range(optimized_sheet.max_row, 1, -1):
             # 2 consecutive blank rows
             if optimized_sheet[row][0].value is None and optimized_sheet[row - 1][0].value is None:
                 optimized_sheet.delete_rows(row - 1, 1)
                 optimized_sheet.row_dimensions[row + 1].outlineLevel = 1
-            # if the row is blank, set the outline level to 0
-            if optimized_sheet.row_dimensions[row].outlineLevel == 2:
+            if optimized_sheet.row_dimensions[row].outlineLevel == 3:
                 continue
-            if optimized_sheet[row][0].value is None:
+            # if the row is blank, set the outline level to 0
+            if row in bottom_groups:
+                optimized_sheet.row_dimensions[row].outlineLevel = 3
+            elif type(optimized_sheet[row][2].value) is int:
+                optimized_sheet.row_dimensions[row].outlineLevel = 2
+            elif optimized_sheet[row][0].value is None:
                 optimized_sheet.row_dimensions[row].outlineLevel = 0
                 optimized_sheet.row_dimensions[row + 1].outlineLevel = 0
             # if the row is not blank, set the outline level to 1
@@ -820,11 +965,6 @@ class Ui_MainWindow:
                 optimized_sheet.row_dimensions[row].outlineLevel = 1
         optimized_sheet.row_dimensions[2].outlineLevel = 0  # first row is the header, no grouping
 
-        for group in bottom_groups:
-            # group packaging SKUs together
-            optimized_sheet.row_dimensions.group(start=group[0], end=group[1], hidden=False)
-            for row in range(group[0], group[1]):
-                optimized_sheet.row_dimensions[row].outlineLevel = 2
         for row in range(1, optimized_sheet.max_row + 1):
             optimized_sheet.row_dimensions[row].hidden = False
 

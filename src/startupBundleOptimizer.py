@@ -1,15 +1,31 @@
 import sys
 from PyQt6 import QtWidgets
-from BundleGUI import Ui_MainWindow
+import BundleGUI as gui
 
-# start the Qt GUI application
-app = QtWidgets.QApplication(sys.argv)
+def handleException():
+    """
+    Handle exceptions by displaying the error message and exiting the application.
+    """
+    def excepthook(type, value, traceback):
+        gui.excepthook(type, value, traceback)
+    return excepthook
 
-# Fusion style
-app.setStyle("Fusion")
+def startGUI():
+    # start the Qt GUI application
+    app = QtWidgets.QApplication(sys.argv)
 
-# create an instance of the GUI
-ui = Ui_MainWindow()
+    # Fusion style
+    app.setStyle("Fusion")
 
-# exit the GUI
-sys.exit(app.exec())
+    # create an instance of the GUI
+    ui = gui.ProgramGUI()
+
+    # exit the GUI
+    sys.exit(app.exec())
+
+if __name__ == "__main__":
+    # set the exception hook to handle uncaught exceptions
+    sys.excepthook = handleException()
+
+    # start the GUI application
+    startGUI()

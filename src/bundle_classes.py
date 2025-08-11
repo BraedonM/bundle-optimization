@@ -90,11 +90,12 @@ class Bundle:
         """
         if not self.skus:
             return 0, 0, 0
+        non_packaging_skus = [sku for sku in self.skus if not sku.id.startswith("Pack_")]
 
-        max_x = max(sku.x + sku.width for sku in self.skus)
-        max_y = max(sku.y + sku.height for sku in self.skus)
+        max_x = max(sku.x + sku.width for sku in non_packaging_skus)
+        max_y = max(sku.y + sku.height for sku in non_packaging_skus)
         # max_length = max(sku.length for sku in self.skus)
-        max_length = 3680 if (max(sku.length for sku in self.skus if sku.length) < 3700) else 7340
+        max_length = 3680 if (max(sku.length for sku in non_packaging_skus if sku.length) < 3700) else 7340
 
         return max_x, max_y, max_length
 
@@ -210,8 +211,8 @@ def create_packaging_classes(data: List[dict]) -> List[SKU]:
     PACK_ANGLE_3680 = SKU(
         id='Pack_Angle_3680',
         bundleqty=pack_angle['3680mm Qty'],
-        # width=pack_angle['Width (mm)'],
-        # height=pack_angle['Height (mm)'],
+        width=pack_angle['Width (mm)'],
+        height=pack_angle['Height (mm)'],
         length=pack_angle['3680mm Length (mm)'],
         weight=pack_angle['3680mm Weight (kg)'],
         desc=pack_angle['Description'],
@@ -220,8 +221,8 @@ def create_packaging_classes(data: List[dict]) -> List[SKU]:
     PACK_ANGLE_7340 = SKU(
         id='Pack_Angle_7340',
         bundleqty=pack_angle['7340mm Qty'],
-        # width=pack_angle['Width (mm)'],
-        # height=pack_angle['Height (mm)'],
+        width=pack_angle['Width (mm)'],
+        height=pack_angle['Height (mm)'],
         length=pack_angle['7340mm Length (mm)'],
         weight=pack_angle['7340mm Weight (kg)'],
         desc=pack_angle['Description'],
@@ -232,8 +233,8 @@ def create_packaging_classes(data: List[dict]) -> List[SKU]:
     PACK_1_4_19_DUN_3680 = SKU(
         id='Pack_1x4x19_Dun_3680',
         bundleqty=pack_1x4x19_dun['3680mm Qty'],
-        # width=pack_1x4x19_dun['Width (mm)'],
-        # height=pack_1x4x19_dun['Height (mm)'],
+        width=pack_1x4x19_dun['Width (mm)'],
+        height=pack_1x4x19_dun['Height (mm)'],
         length=pack_1x4x19_dun['3680mm Length (mm)'],
         weight=pack_1x4x19_dun['3680mm Weight (kg)'],
         desc=pack_1x4x19_dun['Description'],
@@ -242,8 +243,8 @@ def create_packaging_classes(data: List[dict]) -> List[SKU]:
     PACK_1_4_19_DUN_7340 = SKU(
         id='Pack_1x4x19_Dun_7340',
         bundleqty=pack_1x4x19_dun['7340mm Qty'],
-        # width=pack_1x4x19_dun['Width (mm)'],
-        # height=pack_1x4x19_dun['Height (mm)'],
+        width=pack_1x4x19_dun['Width (mm)'],
+        height=pack_1x4x19_dun['Height (mm)'],
         length=pack_1x4x19_dun['7340mm Length (mm)'],
         weight=pack_1x4x19_dun['7340mm Weight (kg)'],
         desc=pack_1x4x19_dun['Description'],
@@ -254,8 +255,8 @@ def create_packaging_classes(data: List[dict]) -> List[SKU]:
     PACK_2_3_19_DUN_3680 = SKU(
         id='Pack_2x3x19_Dun_3680',
         bundleqty=pack_2x3x19_dun['3680mm Qty'],
-        # width=pack_2x3x19_dun['Width (mm)'],
-        # height=pack_2x3x19_dun['Height (mm)'],
+        width=pack_2x3x19_dun['Width (mm)'],
+        height=pack_2x3x19_dun['Height (mm)'],
         length=pack_2x3x19_dun['3680mm Length (mm)'],
         weight=pack_2x3x19_dun['3680mm Weight (kg)'],
         desc=pack_2x3x19_dun['Description'],
@@ -263,8 +264,8 @@ def create_packaging_classes(data: List[dict]) -> List[SKU]:
     PACK_2_3_19_DUN_7340 = SKU(
         id='Pack_2x3x19_Dun_7340',
         bundleqty=pack_2x3x19_dun['7340mm Qty'],
-        # width=pack_2x3x19_dun['Width (mm)'],
-        # height=pack_2x3x19_dun['Height (mm)'],
+        width=pack_2x3x19_dun['Width (mm)'],
+        height=pack_2x3x19_dun['Height (mm)'],
         length=pack_2x3x19_dun['7340mm Length (mm)'],
         weight=pack_2x3x19_dun['7340mm Weight (kg)'],
         desc=pack_2x3x19_dun['Description'],
@@ -275,8 +276,8 @@ def create_packaging_classes(data: List[dict]) -> List[SKU]:
     PACK_LUMBER_3680 = SKU(
         id='Pack_Lumber_3680',
         bundleqty=pack_lumber['3680mm Qty'],
-        # width=pack_lumber['Width (mm)'],
-        # height=pack_lumber['Height (mm)'],
+        width=pack_lumber['Width (mm)'],
+        height=pack_lumber['Height (mm)'],
         length=pack_lumber['3680mm Length (mm)'],
         weight=pack_lumber['3680mm Weight (kg)'],
         desc=pack_lumber['Description'],
@@ -284,8 +285,8 @@ def create_packaging_classes(data: List[dict]) -> List[SKU]:
     PACK_LUMBER_7340 = SKU(
         id='Pack_Lumber_7340',
         bundleqty=pack_lumber['7340mm Qty'],
-        # width=pack_lumber['Width (mm)'],
-        # height=pack_lumber['Height (mm)'],
+        width=pack_lumber['Width (mm)'],
+        height=pack_lumber['Height (mm)'],
         length=pack_lumber['7340mm Length (mm)'],
         weight=pack_lumber['7340mm Weight (kg)'],
         desc=pack_lumber['Description'],
@@ -296,8 +297,8 @@ def create_packaging_classes(data: List[dict]) -> List[SKU]:
     PACK_PAD_8_3680 = SKU(
         id='Pack_Pad_8_3680',
         bundleqty=pack_pad_8['3680mm Qty'],
-        # width=pack_pad_8['Width (mm)'],
-        # height=pack_pad_8['Height (mm)'],
+        width=pack_pad_8['Width (mm)'],
+        height=pack_pad_8['Height (mm)'],
         length=pack_pad_8['3680mm Length (mm)'],
         weight=pack_pad_8['3680mm Weight (kg)'],
         desc=pack_pad_8['Description'],
@@ -305,8 +306,8 @@ def create_packaging_classes(data: List[dict]) -> List[SKU]:
     PACK_PAD_8_7340 = SKU(
         id='Pack_Pad_8_7340',
         bundleqty=pack_pad_8['7340mm Qty'],
-        # width=pack_pad_8['Width (mm)'],
-        # height=pack_pad_8['Height (mm)'],
+        width=pack_pad_8['Width (mm)'],
+        height=pack_pad_8['Height (mm)'],
         length=pack_pad_8['7340mm Length (mm)'],
         weight=pack_pad_8['7340mm Weight (kg)'],
         desc=pack_pad_8['Description'],
@@ -317,8 +318,8 @@ def create_packaging_classes(data: List[dict]) -> List[SKU]:
     PACK_PAD_10_3680 = SKU(
         id='Pack_Pad_10_3680',
         bundleqty=pack_pad_10['3680mm Qty'],
-        # width=pack_pad_10['Width (mm)'],
-        # height=pack_pad_10['Height (mm)'],
+        width=pack_pad_10['Width (mm)'],
+        height=pack_pad_10['Height (mm)'],
         length=pack_pad_10['3680mm Length (mm)'],
         weight=pack_pad_10['3680mm Weight (kg)'],
         desc=pack_pad_10['Description'],
@@ -326,8 +327,8 @@ def create_packaging_classes(data: List[dict]) -> List[SKU]:
     PACK_PAD_10_7340 = SKU(
         id='Pack_Pad_10_7340',
         bundleqty=pack_pad_10['7340mm Qty'],
-        # width=pack_pad_10['Width (mm)'],
-        # height=pack_pad_10['Height (mm)'],
+        width=pack_pad_10['Width (mm)'],
+        height=pack_pad_10['Height (mm)'],
         length=pack_pad_10['7340mm Length (mm)'],
         weight=pack_pad_10['7340mm Weight (kg)'],
         desc=pack_pad_10['Description'],
@@ -338,8 +339,8 @@ def create_packaging_classes(data: List[dict]) -> List[SKU]:
     PACK_PAD_13_3680 = SKU(
         id='Pack_Pad_13_3680',
         bundleqty=pack_pad_13['3680mm Qty'],
-        # width=pack_pad_13['Width (mm)'],
-        # height=pack_pad_13['Height (mm)'],
+        width=pack_pad_13['Width (mm)'],
+        height=pack_pad_13['Height (mm)'],
         length=pack_pad_13['3680mm Length (mm)'],
         weight=pack_pad_13['3680mm Weight (kg)'],
         desc=pack_pad_13['Description'],
@@ -347,8 +348,8 @@ def create_packaging_classes(data: List[dict]) -> List[SKU]:
     PACK_PAD_13_7340 = SKU(
         id='Pack_Pad_13_7340',
         bundleqty=pack_pad_13['7340mm Qty'],
-        # width=pack_pad_13['Width (mm)'],
-        # height=pack_pad_13['Height (mm)'],
+        width=pack_pad_13['Width (mm)'],
+        height=pack_pad_13['Height (mm)'],
         length=pack_pad_13['7340mm Length (mm)'],
         weight=pack_pad_13['7340mm Weight (kg)'],
         desc=pack_pad_13['Description'],
@@ -359,8 +360,8 @@ def create_packaging_classes(data: List[dict]) -> List[SKU]:
     PACK_PAD_19_3680 = SKU(
         id='Pack_Pad_19_3680',
         bundleqty=pack_pad_19['3680mm Qty'],
-        # width=pack_pad_19['Width (mm)'],
-        # height=pack_pad_19['Height (mm)'],
+        width=pack_pad_19['Width (mm)'],
+        height=pack_pad_19['Height (mm)'],
         length=pack_pad_19['3680mm Length (mm)'],
         weight=pack_pad_19['3680mm Weight (kg)'],
         desc=pack_pad_19['Description'],
@@ -368,8 +369,8 @@ def create_packaging_classes(data: List[dict]) -> List[SKU]:
     PACK_PAD_19_7340 = SKU(
         id='Pack_Pad_19_7340',
         bundleqty=pack_pad_19['7340mm Qty'],
-        # width=pack_pad_19['Width (mm)'],
-        # height=pack_pad_19['Height (mm)'],
+        width=pack_pad_19['Width (mm)'],
+        height=pack_pad_19['Height (mm)'],
         length=pack_pad_19['7340mm Length (mm)'],
         weight=pack_pad_19['7340mm Weight (kg)'],
         desc=pack_pad_19['Description'],
@@ -380,8 +381,8 @@ def create_packaging_classes(data: List[dict]) -> List[SKU]:
     PACK_SUB_BNDL_WRP_3680 = SKU(
         id='Pack_Sub_Bndl_Wrp_3680',
         bundleqty=pack_sub_bndl_wrp['3680mm Qty'],
-        # width=pack_sub_bndl_wrp['Width (mm)'],
-        # height=pack_sub_bndl_wrp['Height (mm)'],
+        width=pack_sub_bndl_wrp['Width (mm)'],
+        height=pack_sub_bndl_wrp['Height (mm)'],
         length=pack_sub_bndl_wrp['3680mm Length (mm)'],
         weight=pack_sub_bndl_wrp['3680mm Weight (kg)'],
         desc=pack_sub_bndl_wrp['Description'],
@@ -389,8 +390,8 @@ def create_packaging_classes(data: List[dict]) -> List[SKU]:
     PACK_SUB_BNDL_WRP_7340 = SKU(
         id='Pack_Sub_Bndl_Wrp_7340',
         bundleqty=pack_sub_bndl_wrp['7340mm Qty'],
-        # width=pack_sub_bndl_wrp['Width (mm)'],
-        # height=pack_sub_bndl_wrp['Height (mm)'],
+        width=pack_sub_bndl_wrp['Width (mm)'],
+        height=pack_sub_bndl_wrp['Height (mm)'],
         length=pack_sub_bndl_wrp['7340mm Length (mm)'],
         weight=pack_sub_bndl_wrp['7340mm Weight (kg)'],
         desc=pack_sub_bndl_wrp['Description'],
@@ -401,8 +402,8 @@ def create_packaging_classes(data: List[dict]) -> List[SKU]:
     PACK_MST_BNDL_WRP_3680 = SKU(
         id='Pack_Mst_Bndl_Wrp_3680',
         bundleqty=pack_mst_bndl_wrp['3680mm Qty'],
-        # width=pack_mst_bndl_wrp['Width (mm)'],
-        # height=pack_mst_bndl_wrp['Height (mm)'],
+        width=pack_mst_bndl_wrp['Width (mm)'],
+        height=pack_mst_bndl_wrp['Height (mm)'],
         length=pack_mst_bndl_wrp['3680mm Length (mm)'],
         weight=pack_mst_bndl_wrp['3680mm Weight (kg)'],
         desc=pack_mst_bndl_wrp['Description'],
@@ -410,8 +411,8 @@ def create_packaging_classes(data: List[dict]) -> List[SKU]:
     PACK_MST_BNDL_WRP_7340 = SKU(
         id='Pack_Mst_Bndl_Wrp_7340',
         bundleqty=pack_mst_bndl_wrp['7340mm Qty'],
-        # width=pack_mst_bndl_wrp['Width (mm)'],
-        # height=pack_mst_bndl_wrp['Height (mm)'],
+        width=pack_mst_bndl_wrp['Width (mm)'],
+        height=pack_mst_bndl_wrp['Height (mm)'],
         length=pack_mst_bndl_wrp['7340mm Length (mm)'],
         weight=pack_mst_bndl_wrp['7340mm Weight (kg)'],
         desc=pack_mst_bndl_wrp['Description'],
