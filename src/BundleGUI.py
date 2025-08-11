@@ -12,6 +12,7 @@ import time
 import numpy as np
 import warnings
 import ctypes
+import cProfile
 
 from bundle_classes import SKU, create_packaging_classes
 from bundle_visualize import visualize_bundles
@@ -278,6 +279,9 @@ class ProgramGUI:
         """
         Open the help file in the file explorer
         """
+        # def optimize_test():
+        #     self.optimizeBundles()
+        # cProfile.runctx('self.optimizeBundles()', None, locals())
         self.show_alert("Help", """
         For additional support, please contact Aionex Solutions Ltd.
         (604-309-8975)

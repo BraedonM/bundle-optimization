@@ -333,8 +333,8 @@ def _stack_skus_flat(bundle: Bundle, sku_groups: dict = {}) -> None:
             for sku in reversed(group):
                 if current_y == 0 or _has_sufficient_support(0, current_y, sku.width, new_bundle):
                     new_bundle.add_sku(sku, 0, current_y, False)  # Place SKU without rotation
-                    current_y += sku.height
                     sku_groups[x].remove(sku)
+            current_y += max_height
             if not sku_groups[x]:
                 del sku_groups[x]
         if new_bundle.skus:
@@ -360,6 +360,10 @@ def _pack_single_bundle(skus: List[SKU], bundle: Bundle) -> List[SKU]:
         # Pack bottom row first if eligible SKUs exist
         row_height = _place_bottom_row(bundle, bottom_eligible_skus, remaining_skus, True)
         current_y += row_height
+
+    # turn all SKUs horizontal
+    for sku in remaining_skus:
+        sku.width, sku.height = _get_sku_dimensions(sku, False)
 
     short_skus = [sku for sku in remaining_skus if sku.length <= 609]
     remaining_skus = [sku for sku in remaining_skus if sku.length > 609]
@@ -393,6 +397,12 @@ def _pack_single_bundle(skus: List[SKU], bundle: Bundle) -> List[SKU]:
             short_skus.remove(sku)
     bundle.width = original_width
     bundle.height = original_height
+
+    # remove filler if not all short SKUs are placed
+    if short_skus:
+        for sku in reversed(bundle.skus):
+            if "Filler" in sku.id or sku.length < 609:
+                bundle.skus.remove(sku)
 
     if short_skus and current_y < bundle.height:
         while short_skus and current_y < bundle.height:
@@ -637,7 +647,7 @@ def _place_short_sku_in_filler(bundle: Bundle, sku, in_bundle: bool) -> None:
         for rotated in [False, True]:
             width, height = _get_sku_dimensions(sku, rotated)
 
-            if (width <= filler.width and height <= filler.height and sku.length <= filler.length):
+            if (width <= filler.width + 1 and height <= filler.height + 1 and sku.length <= filler.length):
                 # _can_place_sku_at_position(sku, filler.x, filler.y, sku.width, sku.height, bundle)):
                 sku.width, sku.height = width, height
                 if in_bundle:
