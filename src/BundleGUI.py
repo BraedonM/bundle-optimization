@@ -352,37 +352,61 @@ class ProgramGUI:
         # find orders that have been updated since last optimization (the 'OptimizedOn' column is earlier than the 'LastModifiedOn' column)
         orders_to_remove = []
         found_order = False
+        reverted_overrides = []
+        order_rows = {}
         # get the last modified date of the order from the optimized sheet
         for rowIdx in range(optimized_sheet.max_row, 0, -1):
             row = optimized_sheet[rowIdx]
             if not any(cell.value for cell in row):
                 found_order = False
                 continue  # skip empty rows
-            if row[1].value in orders:
+            orderNbr = row[1].value
+            if orderNbr in orders:
+                # remove the order from the file so it can be re-optimized
+                if orderNbr not in order_rows:
+                    order_rows[orderNbr] = []
+                if not found_order:
+                    found_order = True
+                    order_rows[orderNbr].append(rowIdx + 1)
+                order_rows[orderNbr].append(rowIdx)
+
+                if type(row[2].value) is not int:
+                    continue
                 last_modified_on = row[-2].value
                 optimized_on = row[-1].value
                 # convert to datetime if not None
                 if last_modified_on and optimized_on:
                     last_modified_on = datetime.strptime(last_modified_on, "%Y-%m-%d")
                     optimized_on = datetime.strptime(optimized_on, "%Y-%m-%d")
-                    if last_modified_on <= optimized_on and row[1].value not in self.override_orders: # modified earlier than it was optimized
-                        # don't re-optimize this order
-                        orders_to_remove.append(row[1].value)
-                    else:
-                        # remove the order from the file so it can be re-optimized
-                        if not found_order:
-                            found_order = True
-                            optimized_sheet.row_dimensions[rowIdx + 1].outlineLevel = 0
-                            optimized_sheet.delete_rows(rowIdx + 1, 1)  # remove blank row that separates orders
-                        optimized_sheet.row_dimensions[rowIdx].outlineLevel = 0
-                        optimized_sheet.delete_rows(rowIdx, 1)  # remove the row from the optimized sheet
+                    if last_modified_on <= optimized_on:
+
+                        override = row[3].value
+                        sku_id = row[7].value.strip()
+
+                        if override and not str(sku_id).startswith('Pack_'):
+                            if (orderNbr not in reverted_overrides
+                                and orderNbr not in self.override_orders
+                                and orderNbr in orders):
+                                reverted_overrides.append(orderNbr)
+
+                        elif orderNbr not in self.override_orders: # modified earlier than it was optimized
+                            # don't re-optimize this order
+                            orders_to_remove.append(orderNbr)
         # remove the orders that have been optimized
         orders_to_remove = set(orders_to_remove)  # convert to set for faster lookup
+        orders_to_remove = [order for order in orders_to_remove if order not in reverted_overrides]
         orders = [order for order in orders if order not in orders_to_remove]
+
+        for order in orders:
+            if order in order_rows:
+                for rowIdx in order_rows[order]:
+                    optimized_sheet.row_dimensions[rowIdx].outlineLevel = 0
+                    optimized_sheet.delete_rows(rowIdx, 1)
 
         # save the workbook after removing orders
         try:
-            optimized_sheet.append([])  # add a blank row at the end to separate orders
+            if optimized_sheet.max_row != 1:
+                optimized_sheet.append([])  # add a blank row at the end to separate orders
             workbook.save(self.ui.appendDir.text())
         except Exception as e:
             self.show_alert("Error", f"Error with the existing optimized data file.\nEnsure the path is correct and the file is not open. Error: {e}", "error")
