@@ -66,8 +66,8 @@ class ProgramGUI:
         self.ui.imperialButton.clicked.connect(self.setImperialUnits)
 
         self.workingDir = None  # to hold the directory of the selected Excel file
-        self.disabledButton = "background-color: rgb(39, 39, 39);"
-        self.enabledButton = "background-color: rgb(0, 90, 180);"
+        self.disabledButton = "background-color: rgb(39, 39, 39); color: rgb(255, 255, 255);"
+        self.enabledButton = "background-color: rgb(0, 90, 180); color: rgb(255, 255, 255);"
         self.setMetricUnits()  # Set default units to metric
         self.set_unit = 'metric'  # to hold the current unit system
 

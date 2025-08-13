@@ -13,6 +13,7 @@ MAX_DIST_FROM_CEILING = 30  # mm, maximum distance from ceiling to be considered
 STACKING_MAX_DIFF = 13  # mm, maximum difference in width and height for lengthwise stacking SKUs
 SKU_MAX_HEIGHT_DIFF = 50  # mm, maximum height difference for SKUs to be considered compatible in a row
 BASE_COVERAGE_THRESHOLD = 0.8 # Base coverage threshold for support checks (%)
+SKU_COVERAGE_HEIGHT_BUFFER = 10  # mm, buffer for how far below a SKU can be to be considered coverage
 
 def pack_skus(skus: List[SKU], bundle_width: int, bundle_height: int, mach1_skus: List[str]) -> List[Bundle]:
     """Main entry point for packing SKUs into bundles"""
@@ -926,7 +927,7 @@ def _has_sufficient_ceiling_coverage(bundle: Bundle, get_value: bool = False) ->
 def _has_sufficient_support(x: int, y: int, width: int, bundle: Bundle, get_value: bool = False) -> bool:
     """Check if position has sufficient support from SKUs below"""
     threshold = BASE_COVERAGE_THRESHOLD
-    buffer = 10
+    buffer = SKU_COVERAGE_HEIGHT_BUFFER
     support_segments = []
     # Loop through SKUs to find overlaps
     for sku in bundle.skus:

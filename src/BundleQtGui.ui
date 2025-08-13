@@ -463,7 +463,8 @@ color: rgb(9, 9, 9);</string>
             </font>
            </property>
            <property name="styleSheet">
-            <string notr="true">background-color: rgb(39, 39, 39);</string>
+            <string notr="true">background-color: rgb(39, 39, 39);
+color: rgb(127, 127, 127);</string>
            </property>
            <property name="text">
             <string>Imperial</string>

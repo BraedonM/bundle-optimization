@@ -179,7 +179,8 @@ class Ui_BundleOptimizer(object):
         font = QtGui.QFont()
         font.setBold(True)
         self.imperialButton.setFont(font)
-        self.imperialButton.setStyleSheet("background-color: rgb(39, 39, 39);")
+        self.imperialButton.setStyleSheet("background-color: rgb(39, 39, 39);\n"
+"color: rgb(127, 127, 127);")
         self.imperialButton.setObjectName("imperialButton")
         self.horizontalLayout_5.addWidget(self.imperialButton)
         self.verticalLayout_9.addWidget(self.frame_14, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
