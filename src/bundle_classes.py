@@ -26,6 +26,10 @@ PACK_MST_BNDL_WRP_7340 = None
 FILLER_44 = None
 FILLER_62 = None
 
+PACKAGING_HEIGHT = 69.8  # mm
+PACKAGING_WIDTH = 12.8   # mm
+LUMBER_HEIGHT = 19.0    # mm
+
 @dataclass
 class SKU:
     id: str

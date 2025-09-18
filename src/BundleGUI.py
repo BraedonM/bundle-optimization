@@ -14,7 +14,7 @@ import warnings
 import ctypes
 import cProfile
 
-from bundle_classes import SKU, create_packaging_classes
+from bundle_classes import SKU, create_packaging_classes, PACKAGING_HEIGHT, PACKAGING_WIDTH, LUMBER_HEIGHT
 from bundle_visualize import visualize_bundles
 from bundle_packing import pack_skus
 
@@ -31,7 +31,7 @@ def excepthook(type, value, traceback):
         )
     except Exception:
         errorString = "An error occurred."
-		
+
     QMessageBox.critical(None, "Error", errorString)
 
 class ProgramGUI:
@@ -134,8 +134,8 @@ class ProgramGUI:
         """
         Optimize bundles based on the data from the Excel file
         """
-        self.maxWidth = 559
-        self.maxHeight = 559
+        self.maxWidth = 508
+        self.maxHeight = 508
         self.maxLength = 3680
         self.missingDataSKUs = []  # to hold SKUs that are missing data in the Excel file
         self.removed_skus = []  # to hold SKUs that were removed during optimization
@@ -484,7 +484,7 @@ class ProgramGUI:
                     if row['Bdl_Override'] and row['OrderNbr'] not in self.override_orders:
                         self.override_orders.append(row['OrderNbr'])
                     # convert Quantity to Pcs/Bundle
-                    whole_qty = floor(abs(row['Quantity'])) / row['Pcs/Bundle']
+                    whole_qty = floor(abs(row['Quantity']) / row['Pcs/Bundle'])
                     fraction_remaining = (ceil(abs(row['Quantity'])) % row['Pcs/Bundle']) / row['Pcs/Bundle']
 
                     if f'{row['OrderNbr']}_{row['InventoryID']}_{row['Bdl_Override']}' in seen_skus.keys():
@@ -858,6 +858,7 @@ class ProgramGUI:
                 # calculate bundle actual dimensions and weight
                 actual_width, actual_height, _ = bundle.get_actual_dimensions()
                 total_weight = bundle.get_total_weight()
+                lumber = LUMBER_HEIGHT if all([sku.rotated is False for sku in bundle.skus]) else 0
 
                 # add summary row for the bundle
                 optimized_sheet.append([
@@ -872,8 +873,8 @@ class ProgramGUI:
                     len(bundle.skus),  # TotalPcs
                     'N/A',  # BundleQty
                     sum(round(sku.bundleqty) for sku in bundle.skus),
-                    round(actual_width / length_divisor),
-                    round(actual_height / length_divisor),
+                    round((actual_width + PACKAGING_WIDTH) / length_divisor),
+                    round((actual_height + PACKAGING_HEIGHT + lumber) / length_divisor),
                     round(bundle.max_length / length_divisor),
                     round(total_weight * weight_multiplier),
                     '',  # UOM

@@ -8,11 +8,11 @@ MAX_WEIGHT = 1000 # kg
 BOTTOM_ROW_LENGTH = 0
 REMOVED_SKUS = []
 
-MIN_CEILING_COVERAGE = 0.85  # Minimum ceiling coverage required (%)
-MAX_DIST_FROM_CEILING = 30  # mm, maximum distance from ceiling to be considered sufficient coverage
-STACKING_MAX_DIFF = 13  # mm, maximum difference in width and height for lengthwise stacking SKUs
+MIN_CEILING_COVERAGE = 0.7  # Minimum ceiling coverage required (%)
+MAX_DIST_FROM_CEILING = 25  # mm, maximum distance from ceiling to be considered sufficient coverage
+STACKING_MAX_DIFF = 20  # mm, maximum difference in width and height for lengthwise stacking SKUs
 SKU_MAX_HEIGHT_DIFF = 50  # mm, maximum height difference for SKUs to be considered compatible in a row
-BASE_COVERAGE_THRESHOLD = 0.8 # Base coverage threshold for support checks (%)
+BASE_COVERAGE_THRESHOLD = 0.8  # Base coverage threshold for support checks (%)
 SKU_COVERAGE_HEIGHT_BUFFER = 10  # mm, buffer for how far below a SKU can be to be considered coverage
 
 def pack_skus(skus: List[SKU], bundle_width: int, bundle_height: int, mach1_skus: List[str]) -> List[Bundle]:
@@ -50,8 +50,9 @@ def pack_skus(skus: List[SKU], bundle_width: int, bundle_height: int, mach1_skus
     # try to merge bundles if they can all fit in one
     merged_bundles_mach1 = _try_merge_bundles(can_try_merge_bundles_mach1, bundle_width, bundle_height, machine='MACH1')
     merged_bundles_mach5 = _try_merge_bundles(can_try_merge_bundles_mach5, bundle_width, bundle_height, machine='MACH5')
-    final_bundles.extend(merged_bundles_mach1)
-    final_bundles.extend(merged_bundles_mach5)
+    merged_machine_bundles = merged_bundles_mach1 + merged_bundles_mach5
+
+    final_bundles = _try_merge_bundles(merged_machine_bundles, bundle_width, bundle_height, machine='MACH5', diff_machines=True) # mach5 as placeholder
 
     # remove any empty bundles
     final_bundles = [bundle for bundle in final_bundles if (bundle.width > 0 and bundle.height > 0)]
@@ -62,7 +63,7 @@ def pack_skus(skus: List[SKU], bundle_width: int, bundle_height: int, mach1_skus
 
     return override_bundles + final_bundles, REMOVED_SKUS
 
-def _try_merge_bundles(bundles: List[Bundle], bundle_width: int, bundle_height: int, machine: str) -> List[Bundle]:
+def _try_merge_bundles(bundles: List[Bundle], bundle_width: int, bundle_height: int, machine: str, diff_machines: bool = False) -> List[Bundle]:
     """Attempt to merge bundles if they can all fit in one bundle"""
     attempted_merged_bundles = []
     best_bundles = []
@@ -91,7 +92,10 @@ def _try_merge_bundles(bundles: List[Bundle], bundle_width: int, bundle_height: 
                 bundle2 = bundles[j]
 
                 # identify if bundles have already been attempted to be merged
-                if [id(bundle1), id(bundle2)] in attempted_merged_bundles or [id(bundle2), id(bundle1)] in attempted_merged_bundles:
+                if ([id(bundle1), id(bundle2)] in attempted_merged_bundles
+                    or [id(bundle2), id(bundle1)] in attempted_merged_bundles
+                    # flag to merge across machines is true, don't check when machine is the same (since they have already been done)
+                    or (diff_machines and bundle1.packing_machine == bundle2.packing_machine)):
                     continue
                 else:
                     attempted_merged_bundles.append([id(bundle1), id(bundle2)])
@@ -113,6 +117,8 @@ def _try_merge_bundles(bundles: List[Bundle], bundle_width: int, bundle_height: 
                     # if they fit into one bundle, remove the original bundles
                     bundles.pop(j)
                     bundles.pop(i)
+                    if diff_machines:
+                        merged_bundles[0].packing_machine = 'MIXED'
                     bundles.append(merged_bundles[0])
                     merging_able = True
                     break
@@ -171,10 +177,15 @@ def _pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: i
         temp_height = bundle_height
         before_count = len(remaining_skus)
         skus_copy = copy.deepcopy(remaining_skus)
+        new_bundle = False
 
         while True: # Create first iteration
-            bundle = Bundle(temp_width, temp_height, MAX_LENGTH, machine)
-            remaining_skus = _pack_single_bundle(skus_copy, bundle)
+            if new_bundle:
+                bundle = new_bundle
+                new_bundle = False
+            else:
+                bundle = Bundle(temp_width, temp_height, MAX_LENGTH, machine)
+                remaining_skus = _pack_single_bundle(skus_copy, bundle)
 
             if (bundle.height / bundle.width < 0.5 and len(bundle.skus) > 2):
                 temp_width = round(bundle.width - 20)
@@ -191,21 +202,25 @@ def _pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: i
                     max_sku = max(bundle.skus, key=lambda s: s.y + s.height, default=None)
                     temp_temp_height = round(bundle.height - min(max_sku.height + 1, 20))
                     bundle_reduced_height = Bundle(temp_width, temp_temp_height, MAX_LENGTH, packing_machine=machine)
-                    _ = _pack_single_bundle(skus_copy, bundle_reduced_height)
+                    rs1 = _pack_single_bundle(skus_copy, bundle_reduced_height)
                     height_ceiling_coverage = _has_sufficient_ceiling_coverage(bundle_reduced_height, get_value=True)
 
                     # reduce width
                     max_sku = max(bundle.skus, key=lambda s: s.x + s.width, default=None)
                     temp_temp_width = round(bundle.width - min(max_sku.width + 1, 20))
                     bundle_reduced_width = Bundle(temp_temp_width, temp_height, MAX_LENGTH, packing_machine=machine)
-                    _ = _pack_single_bundle(skus_copy, bundle_reduced_width)
+                    rs2 = _pack_single_bundle(skus_copy, bundle_reduced_width)
                     width_ceiling_coverage = _has_sufficient_ceiling_coverage(bundle_reduced_width, get_value=True)
 
                     # compare
                     if height_ceiling_coverage > width_ceiling_coverage:
                         temp_height = temp_temp_height
+                        new_bundle = copy.deepcopy(bundle_reduced_height)
+                        remaining_skus = rs1
                     else:
                         temp_width = temp_temp_width
+                        new_bundle = copy.deepcopy(bundle_reduced_width)
+                        remaining_skus = rs2
                     continue
 
             if (bundle.height > bundle.width and

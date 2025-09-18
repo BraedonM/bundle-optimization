@@ -5,7 +5,7 @@ from typing import List
 import numpy as np
 import copy
 
-from bundle_classes import Bundle
+from bundle_classes import Bundle, PACKAGING_HEIGHT, PACKAGING_WIDTH, LUMBER_HEIGHT
 
 
 def visualize_bundles(original_bundles: List[Bundle], savePath: str = None, unit: str = 'metric') -> None:
@@ -30,10 +30,16 @@ def visualize_bundles(original_bundles: List[Bundle], savePath: str = None, unit
         # remove packaging skus from bundle so they don't show up in the visualization
         bundle.skus = [sku for sku in bundle.skus if (not sku.id.startswith("Pack_") or "Filler" in sku.id)]
         actual_width, actual_height, max_length = bundle.get_actual_dimensions()
+        lumber = LUMBER_HEIGHT if all([sku.rotated is False for sku in bundle.skus]) else 0
+
+        display_width = actual_width + PACKAGING_WIDTH
+        display_height = actual_height + PACKAGING_HEIGHT + lumber
 
         if unit == 'imperial':
             actual_width /= 25.4
             actual_height /= 25.4
+            display_width /= 25.4
+            display_height /= 25.4
             max_length /= 25.4
             weight_kg *= 2.20462
             weight_unit = 'lbs'
@@ -46,7 +52,7 @@ def visualize_bundles(original_bundles: List[Bundle], savePath: str = None, unit
             ticks = 50
             length_divisor = 1
 
-        ax.set_title(f"Bundle {idx + 1}\n({actual_width:.0f}x{actual_height:.0f}x{max_length:.0f}{length_unit}, {weight_kg:.2f}{weight_unit})")
+        ax.set_title(f"Bundle {idx + 1}\n({display_width:.0f}x{display_height:.0f}x{max_length:.0f}{length_unit}, {weight_kg:.2f}{weight_unit})")
         ax.set_xlim(0, actual_width)
         ax.set_ylim(0, actual_height)
         ax.set_aspect('equal')
