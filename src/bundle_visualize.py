@@ -5,10 +5,11 @@ from typing import List
 import numpy as np
 import copy
 
-from bundle_classes import Bundle, PACKAGING_HEIGHT, PACKAGING_WIDTH, LUMBER_HEIGHT
+from bundle_classes import Bundle
 
 
-def visualize_bundles(original_bundles: List[Bundle], savePath: str = None, unit: str = 'metric') -> None:
+def visualize_bundles(original_bundles: List[Bundle], savePath: str = None, unit: str = 'metric',
+                      packaging_height: float = 0, packaging_width: float = 0, lumber_height: float = 0) -> None:
     bundles = copy.deepcopy(original_bundles)
     num_bundles = len(bundles)
     try:
@@ -30,10 +31,10 @@ def visualize_bundles(original_bundles: List[Bundle], savePath: str = None, unit
         # remove packaging skus from bundle so they don't show up in the visualization
         bundle.skus = [sku for sku in bundle.skus if (not sku.id.startswith("Pack_") or "Filler" in sku.id)]
         actual_width, actual_height, max_length = bundle.get_actual_dimensions()
-        lumber = LUMBER_HEIGHT if all([sku.rotated is False for sku in bundle.skus]) else 0
+        lumber = lumber_height if all([sku.rotated is False for sku in bundle.skus]) else 0
 
-        display_width = actual_width + PACKAGING_WIDTH
-        display_height = actual_height + PACKAGING_HEIGHT + lumber
+        display_width = actual_width + packaging_width
+        display_height = actual_height + packaging_height + lumber
 
         if unit == 'imperial':
             actual_width /= 25.4

@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import QMessageBox, QWidget, QApplication
 from BundleQtGui import Ui_BundleOptimizer
 from PyQt6 import QtGui
+from PyQt6 import QtCore
 
 import openpyxl
 import pandas as pd
@@ -14,7 +15,7 @@ import warnings
 import ctypes
 import cProfile
 
-from bundle_classes import SKU, create_packaging_classes, PACKAGING_HEIGHT, PACKAGING_WIDTH, LUMBER_HEIGHT
+from bundle_classes import SKU, create_packaging_classes
 from bundle_visualize import visualize_bundles
 from bundle_packing import pack_skus
 
@@ -158,7 +159,7 @@ class ProgramGUI:
         # Get packaging and filler data from the packaging_data file
         try:
             packaging_data = self.get_packaging_data()
-            create_packaging_classes(packaging_data)
+            self.packaging_height, self.packaging_width, self.lumber_height = create_packaging_classes(packaging_data)
         except Exception as e:
             self.show_alert("Error", f"Unable to retrieve data from the packaging data file. Error: {e}", "error")
             self.ui.progressBar.setValue(0)
@@ -235,7 +236,7 @@ class ProgramGUI:
                 return
             order_bundles[order] = bundles
 
-            visualize_bundles(bundles, f"{images_dir}/Order_{order}.png", self.set_unit)
+            visualize_bundles(bundles, f"{images_dir}/Order_{order}.png", self.set_unit, self.packaging_height, self.packaging_width, self.lumber_height)
         self.images_dir = images_dir
 
         # write the packed bundles to a new sheet in the workbook
@@ -283,32 +284,40 @@ class ProgramGUI:
         #     self.optimizeBundles()
         # cProfile.runctx('self.optimizeBundles()', None, locals())
         self.show_alert("Help", """
-        For additional support, please contact Aionex Solutions Ltd.
-        (604-309-8975)
+        <p>Bundle Optimization Tool v1.0<br>
+        For additional support, please contact Aionex Solutions Ltd.<br>
+        (604-309-8975)</p>
 
-        To use this tool, follow these steps:
+        <p><b>Program Releases and Updates:</b><br>
+        <a href="https://github.com/BraedonM/bundle-optimization/releases">
+        https://github.com/BraedonM/bundle-optimization/releases</a></p>
 
-        1. Click on the first 'Browse' button to select your Excel file
-           containing SKU data.
-            - If you are unsure how to format your Excel file,
-              you can click on 'Open Example File' to open a sample file.
-            - Please format your Excel file according to the example provided.
+        <p>To use this tool, follow these steps:</p>
 
-        2. If you want to append the optimized data to an existing file,
-           click on the second 'Browse' button to select the Excel file
-           where you want to append the optimized data.
+        <ol>
+            <li>Click on the first 'Browse' button to select your Excel file containing SKU data.<br>
+                - If you are unsure how to format your Excel file,<br>
+                  you can click on 'Open Example File' to open a sample file.<br>
+                - Please format your Excel file according to the example provided.
+            </li>
 
-        3. Click on 'Perform Bundle Optimization' to start the
-           optimization process.
-           Wait for the progress bar to complete.
+            <li>If you want to append the optimized data to an existing file,<br>
+                click on the second 'Browse' button to select the Excel file<br>
+                where you want to append the optimized data.
+            </li>
 
-        4. Once the optimization is complete, you can:
-            - Click on 'Open Images Folder' to view the generated bundle images.
-            - Click on 'Open Resultant Excel File' to view the optimized
-              bundle data in an Excel file.
+            <li>Click on 'Perform Bundle Optimization' to start the optimization process.<br>
+                Wait for the progress bar to complete.
+            </li>
 
-        NOTE: All files are generated in the same directory as the input Excel file.
-        """, type="info")
+            <li>Once the optimization is complete, you can:<br>
+                - Click on 'Open Images Folder' to view the generated bundle images.<br>
+                - Click on 'Open Resultant Excel File' to view the optimized bundle data in an Excel file.
+            </li>
+        </ol>
+
+        <p><b>NOTE:</b> All files are generated in the same directory as the input Excel file.</p>
+        """, type="help")
 
 ## Helper Methods (snake_case)
 
@@ -858,7 +867,7 @@ class ProgramGUI:
                 # calculate bundle actual dimensions and weight
                 actual_width, actual_height, _ = bundle.get_actual_dimensions()
                 total_weight = bundle.get_total_weight()
-                lumber = LUMBER_HEIGHT if all([sku.rotated is False for sku in bundle.skus]) else 0
+                lumber = self.lumber_height if all([sku.rotated is False for sku in bundle.skus]) else 0
 
                 # add summary row for the bundle
                 optimized_sheet.append([
@@ -873,8 +882,8 @@ class ProgramGUI:
                     len(bundle.skus),  # TotalPcs
                     'N/A',  # BundleQty
                     sum(round(sku.bundleqty) for sku in bundle.skus),
-                    round((actual_width + PACKAGING_WIDTH) / length_divisor),
-                    round((actual_height + PACKAGING_HEIGHT + lumber) / length_divisor),
+                    round((actual_width + self.packaging_width) / length_divisor),
+                    round((actual_height + self.packaging_height + lumber) / length_divisor),
                     round(bundle.max_length / length_divisor),
                     round(total_weight * weight_multiplier),
                     '',  # UOM
@@ -1012,6 +1021,9 @@ class ProgramGUI:
         Show an alert dialog with the given title and message
         """
         msg_box = QMessageBox(self.Widget)
+        if type == "help":
+            msg_box.setTextFormat(QtCore.Qt.TextFormat.RichText)
+            type = "info"
         msg_box.setWindowTitle(title)
         msg_box.setText(message)
 
@@ -1031,10 +1043,14 @@ class ProgramGUI:
             QLabel {
                 color: white;
             }
+            QLabel a {
+                color: #2980b9;
+            }
             QPushButton {
                 background-color: #eaeaea;
                 color: #090909;
             }
         """)
+
 
         msg_box.exec()

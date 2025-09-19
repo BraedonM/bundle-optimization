@@ -26,10 +26,6 @@ PACK_MST_BNDL_WRP_7340 = None
 FILLER_44 = None
 FILLER_62 = None
 
-PACKAGING_HEIGHT = 69.8  # mm
-PACKAGING_WIDTH = 12.8   # mm
-LUMBER_HEIGHT = 19.0    # mm
-
 @dataclass
 class SKU:
     id: str
@@ -443,3 +439,15 @@ def create_packaging_classes(data: List[dict]) -> List[SKU]:
         weight=filler_62['3680mm Weight (kg)'],
         desc=filler_62['Description'],
     )
+
+    # Get packaging heights
+    packaging_height = (2*pack_angle['Height (mm)'] +
+                        pack_1x4x19_dun['Height (mm)'] +
+                        pack_2x3x19_dun['Height (mm)'] +
+                        2*pack_sub_bndl_wrp['Height (mm)'])
+    # Use height measurements for width too,
+    # as it is still height but just adds to the side of the bundle
+    packaging_width = (2*pack_angle['Height (mm)'] +
+                       2*pack_sub_bndl_wrp['Height (mm)'])
+    lumber_height = (pack_lumber['Height (mm)'])
+    return packaging_height, packaging_width, lumber_height
