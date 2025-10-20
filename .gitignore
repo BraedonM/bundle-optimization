@@ -8,7 +8,7 @@ src/build
 src/dist
 src/new
 
-*/images
+sample_data/*/images
 build
 dist
 BundleOptimizer

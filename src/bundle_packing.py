@@ -62,9 +62,14 @@ def pack_skus(skus: List[SKU], bundle_width: int, bundle_height: int, mach1_skus
             can_try_merge_bundles_mach5.extend(base_bundles)
 
     # try to merge bundles if they can all fit in one
+    for bundle in component_bundles:
+        if bundle.packing_machine == 'MACH1':
+            can_try_merge_bundles_mach1.append(bundle)
+        else:
+            can_try_merge_bundles_mach5.append(bundle)
     merged_bundles_mach1 = _try_merge_bundles(can_try_merge_bundles_mach1, bundle_width, bundle_height, machine='MACH1')
     merged_bundles_mach5 = _try_merge_bundles(can_try_merge_bundles_mach5, bundle_width, bundle_height, machine='MACH5')
-    merged_machine_bundles = merged_bundles_mach1 + merged_bundles_mach5 + component_bundles
+    merged_machine_bundles = merged_bundles_mach1 + merged_bundles_mach5
 
     final_bundles = _try_merge_bundles(merged_machine_bundles, bundle_width, bundle_height, machine='MACH5', diff_machines=True) # mach5 as placeholder
 
