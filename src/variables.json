@@ -12,8 +12,8 @@
     ],
 
     "MAX_WEIGHT": 1000.0,
-    "MAX_HEIGHT": 508.0,
-    "MAX_WIDTH": 508.0,
+    "MAX_HEIGHT": 559.0,
+    "MAX_WIDTH": 559.0,
     "MIN_HEIGHT_WIDTH_RATIO": 0.3,
 
     "MIN_CEILING_COVERAGE": 0.7,
