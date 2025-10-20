@@ -11,6 +11,8 @@ copy "Sub-Bundle_Data.xlsx" "%DEST_DIR%"
 copy "SO_Input_Example.xlsx" "%DEST_DIR%"
 copy "Packaging_Data.xlsx" "%DEST_DIR%"
 
+copy "variables.json" "%DEST_DIR%"
+
 echo Files copied to %DEST_DIR%.
 pause
 

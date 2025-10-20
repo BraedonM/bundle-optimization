@@ -1,0 +1,25 @@
+{
+    "_comment": [
+        "Variables to be pulled into the bundle optimization program. ALL UNITS ARE IN METRIC (mm, kg)",
+        "MAX_WEIGHT (kg), MAX_HEIGHT (mm), and MAX_WIDTH (mm) are the maximum dimensions for a bundle (excludes packaging).",
+        "MIN_HEIGHT_WIDTH_RATIO (default 0.3): minimum ratio of height to width for a bundle to be considered valid. (e.g. 0.3 means height must be at least 30% of width)",
+        "MIN_CEILING_COVERAGE (default 0.7 (70%)): minimum percentage of the ceiling that must be covered by the bundle to be considered valid.",
+        "MAX_DIST_FROM_CEILING (default 25mm): maximum distance from the ceiling for a SKU to be considered in 'ceiling coverage' calculations.",
+        "STACKING_MAX_DIFF (default 20mm): maximum height difference between lengthwise stacked items in a bundle.",
+        "SKU_MAX_HEIGHT_DIFF (default 50mm): maximum height difference between any two SKUs in a bundle.",
+        "BASE_COVERAGE_THRESHOLD (default 0.8 (80%)): minimum percentage of the base of the SKU that is supported by other SKUs to be considered stable.",
+        "SKU_COVERAGE_HEIGHT_BUFFER (default 10mm): maximum vertical space between SKUs to be considered in 'base coverage'."
+    ],
+
+    "MAX_WEIGHT": 1000.0,
+    "MAX_HEIGHT": 508.0,
+    "MAX_WIDTH": 508.0,
+    "MIN_HEIGHT_WIDTH_RATIO": 0.3,
+
+    "MIN_CEILING_COVERAGE": 0.7,
+    "MAX_DIST_FROM_CEILING": 25.0,
+    "STACKING_MAX_DIFF": 20.0,
+    "SKU_MAX_HEIGHT_DIFF": 50.0,
+    "BASE_COVERAGE_THRESHOLD": 0.8,
+    "SKU_COVERAGE_HEIGHT_BUFFER": 10.0
+}

@@ -18,6 +18,7 @@ import cProfile
 from bundle_classes import SKU, create_packaging_classes
 from bundle_visualize import visualize_bundles
 from bundle_packing import pack_skus
+from getJSONdata import VARIABLES
 
 def excepthook(type, value, traceback):
     """
@@ -135,9 +136,9 @@ class ProgramGUI:
         """
         Optimize bundles based on the data from the Excel file
         """
-        self.maxWidth = 508
-        self.maxHeight = 508
-        self.maxLength = 3680
+        self.maxWidth = round(VARIABLES['MAX_WIDTH'])  # mm
+        self.maxHeight = round(VARIABLES['MAX_HEIGHT'])  # mm
+        self.maxLength = 3880 # mm
         self.missingDataSKUs = []  # to hold SKUs that are missing data in the Excel file
         self.removed_skus = []  # to hold SKUs that were removed during optimization
         self.mach1_skus = []  # to hold SKUs that are packed with Mach1
@@ -448,7 +449,7 @@ class ProgramGUI:
 
         # check if the required columns are present
         self.headers = ["OrderType", "OrderNbr", "Bdl_Override", "InventoryID", "Quantity", "Pcs/Bundle", "Can_be_bottom",
-                   "Dim_shrink", "Width_mm", "Height_mm", "Length_mm", "Weight_kg", "UOM", "Description",
+                   "Dim_shrink", "Component", "Width_mm", "Height_mm", "Length_mm", "Weight_kg", "UOM", "Description",
                    "ShipTo", "AddressLine1", "AddressLine2", "City", "State", "Country", "Status", "OrderDate",
                    "ProdReleaseDate", "SchedShipDate", "TargetArrival", "NotBefore", "ShipVia", "LastModifiedOn"]
         for col in self.headers:
@@ -482,6 +483,7 @@ class ProgramGUI:
                 df.loc[df_row_idx, 'Weight_kg'] = float(row['Weight kg/bundle'])# / row['Qty/bundle'] * df.loc[df_row_idx, 'BaseOrderQty'])
                 df.loc[df_row_idx, 'Dim_shrink'] = row['Partial Dim To Reduce']
                 df.loc[df_row_idx, 'Can_be_bottom'] = can_be_bottom
+                df.loc[df_row_idx, 'Component'] = bool(row['Component'])
 
         # iterate through df and convert qty (in pieces) to qty (in bundles)
         df['Quantity'] = df['BaseOrderQty'].astype(float)
@@ -606,7 +608,8 @@ class ProgramGUI:
                                 'TargetArrival': row['TargetArrival'],
                                 'NotBefore': row['NotBefore'],
                                 'ShipVia': row['ShipVia'],
-                                'LastModifiedOn': row['LastModifiedOn']
+                                'LastModifiedOn': row['LastModifiedOn'],
+                                'Component': row['Component']
                             }
                         )
                         skus.append(sku)
@@ -640,7 +643,8 @@ class ProgramGUI:
                             'TargetArrival': row['TargetArrival'],
                             'NotBefore': row['NotBefore'],
                             'ShipVia': row['ShipVia'],
-                            'LastModifiedOn': row['LastModifiedOn']
+                            'LastModifiedOn': row['LastModifiedOn'],
+                            'Component': row['Component']
                         }
                     )
                     skus.append(sku)
@@ -865,7 +869,7 @@ class ProgramGUI:
                     sku_counts[sku.id]['qty'] += 1
 
                 # calculate bundle actual dimensions and weight
-                actual_width, actual_height, _ = bundle.get_actual_dimensions()
+                actual_width, actual_height, _ = bundle.get_actual_dimensions(visual=True)
                 total_weight = bundle.get_total_weight()
                 lumber = self.lumber_height if all([sku.rotated is False for sku in bundle.skus]) else 0
 

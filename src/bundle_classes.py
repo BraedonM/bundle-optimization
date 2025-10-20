@@ -84,13 +84,16 @@ class Bundle:
         self.skus.append(placed)
         return placed
 
-    def get_actual_dimensions(self):
+    def get_actual_dimensions(self, visual=False):
         """
         Calculate the actual dimensions of the bundle based on placed SKUs
         """
         if not self.skus:
             return 0, 0, 0
-        non_packaging_skus = [sku for sku in self.skus if not sku.id.startswith("Pack_")]
+        if visual:
+            non_packaging_skus = [sku for sku in self.skus if not (sku.id.startswith("Pack_") and "Filler" not in sku.id)]
+        else:
+            non_packaging_skus = [sku for sku in self.skus if not sku.id.startswith("Pack_")]
 
         max_x = max(sku.x + sku.width for sku in non_packaging_skus)
         max_y = max(sku.y + sku.height for sku in non_packaging_skus)
@@ -137,23 +140,25 @@ class Bundle:
             self.max_length = 3680
 
             # Pack pad weight
-            if width <= 216: # 8.5 inches
-                self.add_sku(PACK_PAD_8_3680, 0, 0, False)
-            elif width <= 254: # 10 inches
-                self.add_sku(PACK_PAD_10_3680, 0, 0, False)
-            elif width <= 331: # 13 inches
-                self.add_sku(PACK_PAD_13_3680, 0, 0, False)
-            else: # 19 inches
-                self.add_sku(PACK_PAD_19_3680, 0, 0, False)
+            if width >= 152: # If less than 6 inches, don't add any pads
+                if width <= 216: # 8.5 inches
+                    self.add_sku(PACK_PAD_8_3680, 0, 0, False)
+                elif width <= 254: # 10 inches
+                    self.add_sku(PACK_PAD_10_3680, 0, 0, False)
+                elif width <= 331: # 13 inches
+                    self.add_sku(PACK_PAD_13_3680, 0, 0, False)
+                else: # 19 inches
+                    self.add_sku(PACK_PAD_19_3680, 0, 0, False)
 
-            if height <= 216: # 8.5 inches
-                self.add_sku(PACK_PAD_8_3680, 0, 0, False)
-            elif height <= 254: # 10 inches
-                self.add_sku(PACK_PAD_10_3680, 0, 0, False)
-            elif height <= 331: # 13 inches
-                self.add_sku(PACK_PAD_13_3680, 0, 0, False)
-            else: # 19 inches
-                self.add_sku(PACK_PAD_19_3680, 0, 0, False)
+            if height >= 152: # If less than 6 inches, don't add any pads
+                if height <= 216: # 8.5 inches
+                    self.add_sku(PACK_PAD_8_3680, 0, 0, False)
+                elif height <= 254: # 10 inches
+                    self.add_sku(PACK_PAD_10_3680, 0, 0, False)
+                elif height <= 331: # 13 inches
+                    self.add_sku(PACK_PAD_13_3680, 0, 0, False)
+                else: # 19 inches
+                    self.add_sku(PACK_PAD_19_3680, 0, 0, False)
 
             if add_lumber:
                 self.add_sku(PACK_LUMBER_3680, 0, 0, False)
@@ -170,23 +175,25 @@ class Bundle:
             self.max_length = 7340
 
             # Pack pad weight
-            if width <= 216: # 8.5 inches
-                self.add_sku(PACK_PAD_8_7340, 0, 0, False)
-            elif width <= 254: # 10 inches
-                self.add_sku(PACK_PAD_10_7340, 0, 0, False)
-            elif width <= 331: # 13 inches
-                self.add_sku(PACK_PAD_13_7340, 0, 0, False)
-            else: # 19 inches
-                self.add_sku(PACK_PAD_19_7340, 0, 0, False)
+            if width >= 152: # If less than 6 inches, don't add any pads
+                if width <= 216: # 8.5 inches
+                    self.add_sku(PACK_PAD_8_7340, 0, 0, False)
+                elif width <= 254: # 10 inches
+                    self.add_sku(PACK_PAD_10_7340, 0, 0, False)
+                elif width <= 331: # 13 inches
+                    self.add_sku(PACK_PAD_13_7340, 0, 0, False)
+                else: # 19 inches
+                    self.add_sku(PACK_PAD_19_7340, 0, 0, False)
 
-            if height <= 216: # 8.5 inches
-                self.add_sku(PACK_PAD_8_7340, 0, 0, False)
-            elif height <= 254: # 10 inches
-                self.add_sku(PACK_PAD_10_7340, 0, 0, False)
-            elif height <= 331: # 13 inches
-                self.add_sku(PACK_PAD_13_7340, 0, 0, False)
-            else: # 19 inches
-                self.add_sku(PACK_PAD_19_7340, 0, 0, False)
+            if height >= 152: # If less than 6 inches, don't add any pads
+                if height <= 216: # 8.5 inches
+                    self.add_sku(PACK_PAD_8_7340, 0, 0, False)
+                elif height <= 254: # 10 inches
+                    self.add_sku(PACK_PAD_10_7340, 0, 0, False)
+                elif height <= 331: # 13 inches
+                    self.add_sku(PACK_PAD_13_7340, 0, 0, False)
+                else: # 19 inches
+                    self.add_sku(PACK_PAD_19_7340, 0, 0, False)
 
             if add_lumber:
                 self.add_sku(PACK_LUMBER_7340, 0, 0, False)

@@ -30,7 +30,7 @@ def visualize_bundles(original_bundles: List[Bundle], savePath: str = None, unit
         weight_kg = bundle.get_total_weight()
         # remove packaging skus from bundle so they don't show up in the visualization
         bundle.skus = [sku for sku in bundle.skus if (not sku.id.startswith("Pack_") or "Filler" in sku.id)]
-        actual_width, actual_height, max_length = bundle.get_actual_dimensions()
+        actual_width, actual_height, max_length = bundle.get_actual_dimensions(visual=True)
         lumber = lumber_height if all([sku.rotated is False for sku in bundle.skus]) else 0
 
         display_width = actual_width + packaging_width

@@ -1,19 +1,21 @@
 import copy
 from typing import List, Tuple
 from bundle_classes import SKU, Bundle, FILLER_44, FILLER_62
+from getJSONdata import VARIABLES
 from collections import Counter
 
 MAX_LENGTH = 3680 # mm
-MAX_WEIGHT = 1000 # kg
+MAX_WEIGHT = round(VARIABLES['MAX_WEIGHT'])  # kg
+MIN_HEIGHT_WIDTH_RATIO = VARIABLES['MIN_HEIGHT_WIDTH_RATIO']  # Minimum height-to-width ratio for bundles
 BOTTOM_ROW_LENGTH = 0
 REMOVED_SKUS = []
 
-MIN_CEILING_COVERAGE = 0.7  # Minimum ceiling coverage required (%)
-MAX_DIST_FROM_CEILING = 25  # mm, maximum distance from ceiling to be considered sufficient coverage
-STACKING_MAX_DIFF = 20  # mm, maximum difference in width and height for lengthwise stacking SKUs
-SKU_MAX_HEIGHT_DIFF = 50  # mm, maximum height difference for SKUs to be considered compatible in a row
-BASE_COVERAGE_THRESHOLD = 0.8  # Base coverage threshold for support checks (%)
-SKU_COVERAGE_HEIGHT_BUFFER = 10  # mm, buffer for how far below a SKU can be to be considered coverage
+MIN_CEILING_COVERAGE = VARIABLES['MIN_CEILING_COVERAGE']  # Minimum ceiling coverage required (%)
+MAX_DIST_FROM_CEILING = round(VARIABLES['MAX_DIST_FROM_CEILING'])  # mm, maximum distance from ceiling to be considered sufficient coverage
+STACKING_MAX_DIFF = round(VARIABLES['STACKING_MAX_DIFF'])  # mm, maximum difference in width and height for lengthwise stacking SKUs
+SKU_MAX_HEIGHT_DIFF = round(VARIABLES['SKU_MAX_HEIGHT_DIFF'])  # mm, maximum height difference for SKUs to be considered compatible in a row
+BASE_COVERAGE_THRESHOLD = VARIABLES['BASE_COVERAGE_THRESHOLD']  # Base coverage threshold for support checks (%)
+SKU_COVERAGE_HEIGHT_BUFFER = round(VARIABLES['SKU_COVERAGE_HEIGHT_BUFFER'])  # mm, buffer for how far below a SKU can be to be considered coverage
 
 def pack_skus(skus: List[SKU], bundle_width: int, bundle_height: int, mach1_skus: List[str]) -> List[Bundle]:
     """Main entry point for packing SKUs into bundles"""
@@ -21,12 +23,24 @@ def pack_skus(skus: List[SKU], bundle_width: int, bundle_height: int, mach1_skus
     from bundle_classes import FILLER_44, FILLER_62
     # Separate SKUs with bundle override
     override_skus = [sku for sku in skus if sku.data and sku.data.get('Bdl_Override')]
-    regular_skus = [sku for sku in skus if sku not in override_skus]
+    component_skus = [sku for sku in skus if sku.data and sku.data.get('Component')]
+    regular_skus = [sku for sku in skus if (sku not in override_skus and sku not in component_skus)]
 
     # Process override bundles first
     override_bundles = _process_override_bundles(override_skus, bundle_width, bundle_height, mach1_skus)
     if override_bundles == -1:
         return -1, REMOVED_SKUS
+
+    # Pack component SKUs into their own bundles
+    # Find the machine that the SKUs belong to; if both, use "MIXED"
+    mach1_count = [sku[-3:] in mach1_skus for sku in [s.id for s in component_skus]].count(True)
+    if mach1_count == 0:
+        machine = 'MACH5'
+    elif mach1_count == len(component_skus):
+        machine = 'MACH1'
+    else:
+        machine = 'MIXED'
+    component_bundles = _pack_skus_with_pattern(component_skus, bundle_width, bundle_height, machine=machine)
 
     # Group SKUs by color
     color_groups = _group_skus_by_color(regular_skus)
@@ -50,7 +64,7 @@ def pack_skus(skus: List[SKU], bundle_width: int, bundle_height: int, mach1_skus
     # try to merge bundles if they can all fit in one
     merged_bundles_mach1 = _try_merge_bundles(can_try_merge_bundles_mach1, bundle_width, bundle_height, machine='MACH1')
     merged_bundles_mach5 = _try_merge_bundles(can_try_merge_bundles_mach5, bundle_width, bundle_height, machine='MACH5')
-    merged_machine_bundles = merged_bundles_mach1 + merged_bundles_mach5
+    merged_machine_bundles = merged_bundles_mach1 + merged_bundles_mach5 + component_bundles
 
     final_bundles = _try_merge_bundles(merged_machine_bundles, bundle_width, bundle_height, machine='MACH5', diff_machines=True) # mach5 as placeholder
 
@@ -187,7 +201,8 @@ def _pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: i
                 bundle = Bundle(temp_width, temp_height, MAX_LENGTH, machine)
                 remaining_skus = _pack_single_bundle(skus_copy, bundle)
 
-            if (bundle.height / bundle.width < 0.5 and len(bundle.skus) > 2):
+            # If height is 0.3x width or lower, reduce width and try again
+            if (bundle.height / bundle.width < MIN_HEIGHT_WIDTH_RATIO and len(bundle.skus) > 2):
                 temp_width = round(bundle.width - 20)
                 continue
             if (not _has_sufficient_ceiling_coverage(bundle) or bundle.height > bundle.width):
