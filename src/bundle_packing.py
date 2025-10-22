@@ -23,7 +23,7 @@ def pack_skus(skus: List[SKU], bundle_width: int, bundle_height: int, mach1_skus
     from bundle_classes import FILLER_44, FILLER_62
     # Separate SKUs with bundle override
     override_skus = [sku for sku in skus if sku.data and sku.data.get('Bdl_Override')]
-    component_skus = [sku for sku in skus if sku.data and sku.data.get('Component')]
+    component_skus = [sku for sku in skus if sku.data and sku.data.get('Component') and not sku.data.get('Bdl_Override')]
     regular_skus = [sku for sku in skus if (sku not in override_skus and sku not in component_skus)]
 
     # Process override bundles first
