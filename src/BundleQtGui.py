@@ -153,6 +153,7 @@ class Ui_BundleOptimizer(object):
         self.verticalLayout_9.setContentsMargins(-1, 0, -1, 9)
         self.verticalLayout_9.setObjectName("verticalLayout_9")
         self.label_6 = QtWidgets.QLabel(parent=self.frame_13)
+        self.label_6.setStyleSheet("color: rgb(255, 255, 255);")
         self.label_6.setObjectName("label_6")
         self.verticalLayout_9.addWidget(self.label_6, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
         self.frame_14 = QtWidgets.QFrame(parent=self.frame_13)

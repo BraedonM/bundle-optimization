@@ -390,7 +390,8 @@ def _pack_single_bundle(skus: List[SKU], bundle: Bundle) -> List[SKU]:
     # Check for eligible bottom SKUs
     bottom_eligible_skus = [
         sku for sku in remaining_skus
-        if sku.can_be_bottom and abs(sku.length - bundle.max_length) <= 100
+        # new change: allow 289s and 145s as bottom SKUs
+        if sku.can_be_bottom and sku.length > 3600 #abs(sku.length - bundle.max_length) <= 100
     ]
     if len(bottom_eligible_skus) > 0:
         # Pack bottom row first if eligible SKUs exist
@@ -469,13 +470,20 @@ def _place_bottom_row(bundle: Bundle, bottom_eligible_skus: List[SKU], remaining
     for sku in bottom_eligible_skus:
         sku.width, sku.height = _get_sku_dimensions(sku, is_vertical_row)
     freq = Counter(sku.id for sku in bottom_eligible_skus)
-    bottom_eligible_skus.sort(key=lambda s: (freq[s.id], s.height), reverse=True)
+    bottom_eligible_skus.sort(key=lambda s: (s.length, freq[s.id], s.height), reverse=True)
 
     current_x = 0
     row_height = 0
     row_skus = []
+    remove_flag = False
 
     for i, sku in enumerate(bottom_eligible_skus[:]):
+        if remove_flag:
+            bottom_eligible_skus.remove(sku)
+            remaining_skus.remove(sku)
+            remove_flag = False
+            continue
+
         if (current_x + sku.width <= bundle.width and
             (row_height == 0 or sku.height <= row_height) and
             _can_fit_in_bundle(sku, current_x, 0, is_vertical_row, bundle) and
@@ -483,6 +491,12 @@ def _place_bottom_row(bundle: Bundle, bottom_eligible_skus: List[SKU], remaining
             sum(s[1].weight for s in row_skus) + sku.weight <= MAX_WEIGHT):
 
             row_skus.append((i, sku, current_x, 0, is_vertical_row))
+            if sku.length == 3650:
+                for test_sku in bottom_eligible_skus:
+                    if test_sku.id == sku.id and (sku.length + test_sku.length <= bundle.max_length) and id(test_sku) != id(sku):
+                        row_skus.append((i, test_sku, current_x, 0, is_vertical_row))
+                        remove_flag = True
+                        break
             current_x += sku.width
             row_height = max(row_height, sku.height)
             bottom_eligible_skus.remove(sku)
@@ -925,7 +939,7 @@ def _can_place_sku_at_position(sku: SKU, x: int, y: int, width: int, height: int
     """Check if SKU can be placed at specific position with given dimensions"""
     if x + width > bundle.width or y + height > bundle.height or sku.weight + bundle.get_total_weight() > MAX_WEIGHT:
         return False
-    if y == 0 and (not sku.can_be_bottom or (bundle.max_length == 7340 and sku.length < 3700)):
+    if y == 0 and (not sku.can_be_bottom):# or (bundle.max_length == 7340 and sku.length < 3700)):
         return False
 
     for placed_sku in bundle.skus:

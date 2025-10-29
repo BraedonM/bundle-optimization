@@ -70,8 +70,8 @@ class ProgramGUI:
         self.workingDir = None  # to hold the directory of the selected Excel file
         self.disabledButton = "background-color: rgb(39, 39, 39); color: rgb(255, 255, 255);"
         self.enabledButton = "background-color: rgb(0, 90, 180); color: rgb(255, 255, 255);"
-        self.setMetricUnits()  # Set default units to metric
-        self.set_unit = 'metric'  # to hold the current unit system
+        self.setImperialUnits()  # Set default units to metric
+        self.set_unit = 'imperial'  # to hold the current unit system
 
 ## QT Connection Methods (camelCase)
 
@@ -693,7 +693,7 @@ class ProgramGUI:
             optimized_sheet = workbook["Optimized_Bundles"]
 
         # write headers
-        intersect_headers = ['Can_be_bottom', 'Dim_shrink']
+        intersect_headers = ['Can_be_bottom', 'Dim_shrink', 'Component']
         # remove intersect headers from the main headers
         self.headers = [header for header in self.headers if header not in intersect_headers]
         # add headers
