@@ -232,15 +232,24 @@ def _pack_skus_with_pattern(skus: List[SKU], bundle_width: int, bundle_height: i
                     rs2 = _pack_single_bundle(skus_copy, bundle_reduced_width)
                     width_ceiling_coverage = _has_sufficient_ceiling_coverage(bundle_reduced_width, get_value=True)
 
-                    # compare
-                    if height_ceiling_coverage > width_ceiling_coverage:
+                    # compare (if one has more skus packed, pick that one; if same, pick one with better ceiling coverage)
+                    if len(rs1) < len(rs2):
                         temp_height = temp_temp_height
                         new_bundle = copy.deepcopy(bundle_reduced_height)
                         remaining_skus = rs1
-                    else:
+                    elif len(rs2) < len(rs1):
                         temp_width = temp_temp_width
                         new_bundle = copy.deepcopy(bundle_reduced_width)
                         remaining_skus = rs2
+                    else:
+                        if height_ceiling_coverage > width_ceiling_coverage:
+                            temp_height = temp_temp_height
+                            new_bundle = copy.deepcopy(bundle_reduced_height)
+                            remaining_skus = rs1
+                        else:
+                            temp_width = temp_temp_width
+                            new_bundle = copy.deepcopy(bundle_reduced_width)
+                            remaining_skus = rs2
                     continue
 
             if (bundle.height > bundle.width and
@@ -526,7 +535,7 @@ def _pack_row(bundle: Bundle, remaining_skus: List[SKU], current_y: int, is_vert
         sku.width, sku.height = _get_sku_dimensions(sku, is_vertical_row)
     # sort remaining SKUs by how many appear in the list + bundle
     freq = Counter(sku.id for sku in (remaining_skus + bundle.skus))
-    remaining_skus.sort(key=lambda s: (freq[s.id], s.width), reverse=True)
+    remaining_skus.sort(key=lambda s: (freq[s.id] * s.width, freq[s.id], s.width), reverse=True)
 
     # Get accurate bundle weights
     total_weight = bundle.get_total_weight()

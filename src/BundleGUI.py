@@ -249,6 +249,10 @@ class ProgramGUI:
         # self.missingDataSKUs.extend(self.removed_skus)  # add removed SKUs to missing data SKUs
         self.write_optimized_bundles(self.workbook, order_bundles)
 
+        bundle_counter = 0
+        for order_id in order_bundles:
+            bundle_counter += len(order_bundles[order_id])
+        print(f"Total bundle count: {bundle_counter}")
         self.ui.progressBar.setValue(100)
         self.ui.progressLabel.setText("Packing complete!")
 
