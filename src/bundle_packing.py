@@ -479,7 +479,7 @@ def _place_bottom_row(bundle: Bundle, bottom_eligible_skus: List[SKU], remaining
     for sku in bottom_eligible_skus:
         sku.width, sku.height = _get_sku_dimensions(sku, is_vertical_row)
     freq = Counter(sku.id for sku in bottom_eligible_skus)
-    bottom_eligible_skus.sort(key=lambda s: (s.length, freq[s.id], s.height), reverse=True)
+    bottom_eligible_skus.sort(key=lambda s: (s.length, freq[s.id] * s.width, freq[s.id], s.height), reverse=True)
 
     current_x = 0
     row_height = 0
