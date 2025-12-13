@@ -62,16 +62,20 @@ def pack_skus(skus: List[SKU], bundle_width: int, bundle_height: int, mach1_skus
             can_try_merge_bundles_mach5.extend(base_bundles)
 
     # try to merge bundles if they can all fit in one
-    for bundle in component_bundles:
-        if bundle.packing_machine == 'MACH1':
-            can_try_merge_bundles_mach1.append(bundle)
-        else:
-            can_try_merge_bundles_mach5.append(bundle)
     merged_bundles_mach1 = _try_merge_bundles(can_try_merge_bundles_mach1, bundle_width, bundle_height, machine='MACH1')
     merged_bundles_mach5 = _try_merge_bundles(can_try_merge_bundles_mach5, bundle_width, bundle_height, machine='MACH5')
     merged_machine_bundles = merged_bundles_mach1 + merged_bundles_mach5
 
     final_bundles = _try_merge_bundles(merged_machine_bundles, bundle_width, bundle_height, machine='MACH5', diff_machines=True) # mach5 as placeholder
+    # for bundle in component_bundles:
+    #     if bundle.packing_machine == 'MACH1':
+    #         # can_try_merge_bundles_mach1.append(bundle)
+    #         mach1_component_bundles = _fill_bundle_with_components(bundle, final_bundles)
+    #     else:
+    #         # can_try_merge_bundles_mach5.append(bundle)
+    #         mach5_component_bundles = _fill_bundle_with_components(bundle, final_bundles)
+    extra_component_bundles = _fill_bundles_with_components(component_bundles, final_bundles)
+    final_bundles.extend(_try_merge_bundles(extra_component_bundles, bundle_width, bundle_height, machine=machine))
 
     # remove any empty bundles
     final_bundles = [bundle for bundle in final_bundles if (bundle.width > 0 and bundle.height > 0)]
@@ -81,6 +85,10 @@ def pack_skus(skus: List[SKU], bundle_width: int, bundle_height: int, mach1_skus
         bundle.add_packaging()
 
     return override_bundles + final_bundles, REMOVED_SKUS
+
+def _fill_bundles_with_components(component_bundles: List[Bundle], target_bundles: List[Bundle]) -> List[Bundle]:
+    """Place as many component SKUs on top of other SKUs in target bundles as possible"""
+
 
 def _try_merge_bundles(bundles: List[Bundle], bundle_width: int, bundle_height: int, machine: str, diff_machines: bool = False) -> List[Bundle]:
     """Attempt to merge bundles if they can all fit in one bundle"""
