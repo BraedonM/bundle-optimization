@@ -62,20 +62,17 @@ def pack_skus(skus: List[SKU], bundle_width: int, bundle_height: int, mach1_skus
             can_try_merge_bundles_mach5.extend(base_bundles)
 
     # try to merge bundles if they can all fit in one
+    for bundle in component_bundles:
+        if bundle.packing_machine == 'MACH1':
+            can_try_merge_bundles_mach1.append(bundle)
+        else:
+            can_try_merge_bundles_mach5.append(bundle)
     merged_bundles_mach1 = _try_merge_bundles(can_try_merge_bundles_mach1, bundle_width, bundle_height, machine='MACH1')
     merged_bundles_mach5 = _try_merge_bundles(can_try_merge_bundles_mach5, bundle_width, bundle_height, machine='MACH5')
     merged_machine_bundles = merged_bundles_mach1 + merged_bundles_mach5
 
     final_bundles = _try_merge_bundles(merged_machine_bundles, bundle_width, bundle_height, machine='MACH5', diff_machines=True) # mach5 as placeholder
-    # for bundle in component_bundles:
-    #     if bundle.packing_machine == 'MACH1':
-    #         # can_try_merge_bundles_mach1.append(bundle)
-    #         mach1_component_bundles = _fill_bundle_with_components(bundle, final_bundles)
-    #     else:
-    #         # can_try_merge_bundles_mach5.append(bundle)
-    #         mach5_component_bundles = _fill_bundle_with_components(bundle, final_bundles)
-    extra_component_bundles = _fill_bundles_with_components(component_bundles, final_bundles, bundle_width, bundle_height)
-    final_bundles.extend(_try_merge_bundles(extra_component_bundles, bundle_width, bundle_height, machine=machine))
+    final_bundles = _fill_bundles_with_components(final_bundles, bundle_width, bundle_height)
 
     # remove any empty bundles
     final_bundles = [bundle for bundle in final_bundles if (bundle.width > 0 and bundle.height > 0)]
@@ -86,24 +83,31 @@ def pack_skus(skus: List[SKU], bundle_width: int, bundle_height: int, mach1_skus
 
     return override_bundles + final_bundles, REMOVED_SKUS
 
-def _fill_bundles_with_components(component_bundles: List[Bundle], target_bundles: List[Bundle], bundle_width: int, bundle_height: int) -> List[Bundle]:
+def _fill_bundles_with_components(target_bundles: List[Bundle], bundle_width: int, bundle_height: int) -> List[Bundle]:
     """Place as many component SKUs on top of other SKUs in target bundles as possible"""
+    global BOTTOM_ROW_LENGTH
+    temp_bottom_row_length = BOTTOM_ROW_LENGTH
+    BOTTOM_ROW_LENGTH = bundle_width
     component_skus = []
+
+    for _, bundle in reversed(list(enumerate(target_bundles))):
+        # Determine which bundles consist only of component SKUs
+        if all(sku.data and sku.data.get('Component') for sku in bundle.skus):
+            target_bundles.remove(bundle)
+            component_skus.extend(bundle.skus)
 
     if not target_bundles:
         # Create empty target bundle if none exist
         empty_bundle = Bundle(bundle_width, bundle_height, MAX_LENGTH, packing_machine='MIXED')
         target_bundles.append(empty_bundle)
 
-    for bundle in component_bundles:
-        # Add all non-filler SKUs to the list
-        component_skus.extend([sku for sku in bundle.skus if "Filler" not in sku.id])
-
     if not component_skus:
-        return []
+        BOTTOM_ROW_LENGTH = temp_bottom_row_length
+        return target_bundles
 
     # Sort SKUs by size (largest dimension) to optimize packing
     component_skus.sort(key=lambda x: max(x.height, x.width), reverse=True)
+    target_bundles.sort(key=lambda b: b.width, reverse=True)
 
     for bundle in target_bundles:
         if not component_skus:
@@ -117,6 +121,12 @@ def _fill_bundles_with_components(component_bundles: List[Bundle], target_bundle
         if not bundle.skus:
             _ = _pack_row(bundle, component_skus, 0, is_vertical_row=False, max_length=bundle.max_length)
 
+        while True:
+            new_max_height = max(sku.y + sku.height for sku in bundle.skus) + 10
+            row_height = _pack_row(bundle, component_skus, new_max_height, is_vertical_row=False, max_length=bundle.max_length)
+            if row_height == 0:
+                break
+
         # Attempt to fill remaining space with component SKUs
         # fill_remaining_greedy returns the SKUs that could not be placed
         component_skus = fill_remaining_greedy(bundle, component_skus, grid_size=10)
@@ -128,10 +138,11 @@ def _fill_bundles_with_components(component_bundles: List[Bundle], target_bundle
         bundle.resize_to_content()
 
     # If there are still component SKUs left, pack them into new bundles
+    BOTTOM_ROW_LENGTH = temp_bottom_row_length
     if component_skus:
-        return _pack_skus_with_pattern(component_skus, bundle_width, bundle_height)
+        return target_bundles + _pack_skus_with_pattern(component_skus, bundle_width, bundle_height)
 
-    return []
+    return target_bundles
 
 def _try_merge_bundles(bundles: List[Bundle], bundle_width: int, bundle_height: int, machine: str, diff_machines: bool = False) -> List[Bundle]:
     """Attempt to merge bundles if they can all fit in one bundle"""
@@ -530,7 +541,7 @@ def _place_bottom_row(bundle: Bundle, bottom_eligible_skus: List[SKU], remaining
     for sku in bottom_eligible_skus:
         sku.width, sku.height = _get_sku_dimensions(sku, is_vertical_row)
     freq = Counter(sku.id for sku in bottom_eligible_skus)
-    bottom_eligible_skus.sort(key=lambda s: (s.length, freq[s.id], s.height), reverse=True)
+    bottom_eligible_skus.sort(key=lambda s: (s.length, freq[s.id] * s.width, freq[s.id], s.height), reverse=True)
 
     current_x = 0
     row_height = 0
