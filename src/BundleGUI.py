@@ -4,6 +4,7 @@ from PyQt6 import QtGui
 from PyQt6 import QtCore
 
 import openpyxl
+from openpyxl.worksheet.formula import ArrayFormula
 import pandas as pd
 from tkinter import filedialog
 import os
@@ -1014,6 +1015,9 @@ class ProgramGUI:
         for row in range(1, optimized_sheet.max_row + 1):
             optimized_sheet.row_dimensions[row].hidden = False
 
+        # create new sheet with formula data
+        self.write_comparison_sheet(workbook, order_bundles)
+
         # save the workbook
         try:
             if self.append_data:
@@ -1023,6 +1027,66 @@ class ProgramGUI:
         except Exception as e:
             self.show_alert("Error", f"Error saving the file. Is it already open? Error: {e}", "error")
             return
+
+    def write_comparison_sheet(self, workbook, bundles: dict):
+        """
+        Write a comparison sheet with optimized vs. actual order data
+        """
+        if "Order_Comparison" in workbook.sheetnames:
+            del workbook["Order_Comparison"]
+        comparison_sheet = workbook.create_sheet("Order_Comparison")
+
+        if self.set_unit == 'metric':
+            comparison_headers = [
+                "SOrderNbr",
+                "Opt_Bund",
+                "Actual_Bund",
+                "Bundle_Error",
+                "Opt_kg",
+                "Actual_kg",
+                "kg_Error",
+            ]
+            multiplier = 1
+        else:
+            comparison_headers = [
+                "SOrderNbr",
+                "Opt_Bund",
+                "Actual_Bund",
+                "Bundle_Error",
+                "Opt_lbs",
+                "Actual_lbs",
+                "lbs_Error",
+            ]
+            multiplier = 2.20462
+        comparison_sheet.append(comparison_headers)
+
+        src_sheet = workbook["Optimized_Bundles"]
+
+        raw_values = [cell.value for cell in src_sheet["B"] if cell.value is not None]
+
+        processed_data = sorted(list(set(raw_values[1:])))
+
+        for i, value in enumerate(processed_data):
+            row_nbr = str(2 + i)  # Starting from row 2
+            bundle_count = len(bundles[value])
+            bundle_error = f'=B{row_nbr}-C{row_nbr}'
+            weight = round(sum([bundle.get_total_weight() for bundle in bundles[value]]) * multiplier)
+            weight_error = f'=E{row_nbr}-F{row_nbr}'
+            comparison_sheet.cell(row=2+i, column=1, value=value) # A2, A3, A4...
+            comparison_sheet.cell(row=2+i, column=2, value=bundle_count) # B2, B3, B4...
+            comparison_sheet.cell(row=2+i, column=4, value=bundle_error) # D2, D3, D4...
+            comparison_sheet.cell(row=2+i, column=5, value=weight) # E2, E3, E4...
+            comparison_sheet.cell(row=2+i, column=7, value=weight_error) # G2, G3, G4...
+            # color the C and F columns light blue 20% Accent1
+            comparison_sheet.cell(row=2+i, column=3).fill = openpyxl.styles.PatternFill(start_color="d9e7fd", end_color="D9E1F2", fill_type="solid")
+            comparison_sheet.cell(row=2+i, column=6).fill = openpyxl.styles.PatternFill(start_color="d9e7fd", end_color="D9E1F2", fill_type="solid")
+
+        # add table over the data
+        if "OrderComparisonTable" in comparison_sheet.tables:
+            del comparison_sheet.tables["OrderComparisonTable"]
+        table = openpyxl.worksheet.table.Table(displayName="OrderComparisonTable", ref=comparison_sheet.dimensions, tableStyleInfo=openpyxl.worksheet.table.TableStyleInfo(
+            name="TableStyleNone", showFirstColumn=False, showLastColumn=False, showRowStripes=True))
+        comparison_sheet.add_table(table)
 
     def show_alert(self, title, message, type="warning") -> None:
         """
