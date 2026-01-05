@@ -1033,53 +1033,67 @@ class ProgramGUI:
         Write a comparison sheet with optimized vs. actual order data
         """
         if "Order_Comparison" in workbook.sheetnames:
-            del workbook["Order_Comparison"]
-        comparison_sheet = workbook.create_sheet("Order_Comparison")
-
-        if self.set_unit == 'metric':
-            comparison_headers = [
-                "SOrderNbr",
-                "Opt_Bund",
-                "Actual_Bund",
-                "Bundle_Error",
-                "Opt_kg",
-                "Actual_kg",
-                "kg_Error",
-            ]
-            multiplier = 1
+            comparison_sheet = workbook["Order_Comparison"]
+            # loop through existing data to find the last row
+            start_offset = 0
+            for row in comparison_sheet.iter_rows(min_row=2, values_only=True):
+                if row[0] in bundles.keys():
+                    # update existing row to new info
+                    bundle_count = len(bundles[row[0]])
+                    weight = round(sum([bundle.get_total_weight() for bundle in bundles[row[0]]]))
+                    comparison_sheet.cell(row=2+start_offset, column=2, value=bundle_count) # B column
+                    comparison_sheet.cell(row=2+start_offset, column=5, value=weight) # E column
+                if all(cell is None for cell in row):
+                    break
+                start_offset += 1
+            if self.set_unit == 'metric':
+                multiplier = 1
+            else:
+                multiplier = 2.20462
         else:
-            comparison_headers = [
-                "SOrderNbr",
-                "Opt_Bund",
-                "Actual_Bund",
-                "Bundle_Error",
-                "Opt_lbs",
-                "Actual_lbs",
-                "lbs_Error",
-            ]
-            multiplier = 2.20462
-        comparison_sheet.append(comparison_headers)
+            start_offset = 0
+            comparison_sheet = workbook.create_sheet("Order_Comparison")
 
-        src_sheet = workbook["Optimized_Bundles"]
+            if self.set_unit == 'metric':
+                comparison_headers = [
+                    "SOrderNbr",
+                    "Opt_Bund",
+                    "Actual_Bund",
+                    "Bundle_Error",
+                    "Opt_kg",
+                    "Actual_kg",
+                    "kg_Error",
+                ]
+                multiplier = 1
+            else:
+                comparison_headers = [
+                    "SOrderNbr",
+                    "Opt_Bund",
+                    "Actual_Bund",
+                    "Bundle_Error",
+                    "Opt_lbs",
+                    "Actual_lbs",
+                    "lbs_Error",
+                ]
+                multiplier = 2.20462
+            comparison_sheet.append(comparison_headers)
 
-        raw_values = [cell.value for cell in src_sheet["B"] if cell.value is not None]
-
-        processed_data = sorted(list(set(raw_values[1:])))
+        processed_data = sorted(list(bundles.keys()))
 
         for i, value in enumerate(processed_data):
-            row_nbr = str(2 + i)  # Starting from row 2
+            row_nbr = str(2 + i + start_offset)  # Starting from row 2
             bundle_count = len(bundles[value])
             bundle_error = f'=B{row_nbr}-C{row_nbr}'
             weight = round(sum([bundle.get_total_weight() for bundle in bundles[value]]) * multiplier)
             weight_error = f'=E{row_nbr}-F{row_nbr}'
-            comparison_sheet.cell(row=2+i, column=1, value=value) # A2, A3, A4...
-            comparison_sheet.cell(row=2+i, column=2, value=bundle_count) # B2, B3, B4...
-            comparison_sheet.cell(row=2+i, column=4, value=bundle_error) # D2, D3, D4...
-            comparison_sheet.cell(row=2+i, column=5, value=weight) # E2, E3, E4...
-            comparison_sheet.cell(row=2+i, column=7, value=weight_error) # G2, G3, G4...
+            comparison_sheet.cell(row=int(row_nbr), column=1, value=value) # A2, A3, A4...
+            comparison_sheet.cell(row=int(row_nbr), column=2, value=bundle_count) # B2, B3, B4...
+            comparison_sheet.cell(row=int(row_nbr), column=4, value=bundle_error) # D2, D3, D4...
+            comparison_sheet.cell(row=int(row_nbr), column=5, value=weight) # E2, E3, E4...
+            comparison_sheet.cell(row=int(row_nbr), column=7, value=weight_error) # G2, G3, G4...
             # color the C and F columns light blue 20% Accent1
-            comparison_sheet.cell(row=2+i, column=3).fill = openpyxl.styles.PatternFill(start_color="d9e7fd", end_color="D9E1F2", fill_type="solid")
-            comparison_sheet.cell(row=2+i, column=6).fill = openpyxl.styles.PatternFill(start_color="d9e7fd", end_color="D9E1F2", fill_type="solid")
+            comparison_sheet.cell(row=int(row_nbr), column=3).fill = openpyxl.styles.PatternFill(start_color="d9e7fd", end_color="D9E1F2", fill_type="solid")
+            comparison_sheet.cell(row=int(row_nbr), column=6).fill = openpyxl.styles.PatternFill(start_color="d9e7fd", end_color="D9E1F2", fill_type="solid")
 
         # add table over the data
         if "OrderComparisonTable" in comparison_sheet.tables:
